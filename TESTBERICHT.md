@@ -1,10 +1,10 @@
 # Prüfbericht
 
-- Version: 1.5.4
-- Build und automatische Tests: 51 von 51 bestanden
+- Version: 1.5.5
+- Build und automatische Tests: 52 von 52 bestanden
 - Installer: erfolgreich erstellt und installiert
 - Installierte EXE: SHA-256 identisch mit dem geprüften Publish-Build
-- Windows `Installierte Apps`: `Codex-Konten`, Version `1.5.4`, Herausgeber `Andrin`
+- Windows `Installierte Apps`: `Codex-Konten`, Version `1.5.5`, Herausgeber `Andrin`
 - Deinstallation: Eintrag und `unins000.exe` vorhanden
 - Autostart: Benutzer-Eintrag mit `--background` vorhanden
 - Symbol: gemeinsames blaues `C` für EXE, Fenster, Installer und Windows-App-Eintrag

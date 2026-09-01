@@ -1,6 +1,11 @@
-# v1.5.4
+# v1.5.5
 
-Erster öffentlicher Release von Codex Simple Accounts.
+Behebt den Startfehler am Ende der Installation.
+
+## Behoben
+
+- Das Setup startet `Codex-Konten.exe` jetzt direkt statt über den nicht vorhandenen Pfad `C:\Windows\System32\explorer.exe`.
+- Der Abschluss der Installation zeigt dadurch keinen Fehlercode 2 mehr an.
 
 ## Enthalten
 
@@ -14,7 +19,7 @@ Erster öffentlicher Release von Codex Simple Accounts.
 
 ## Sicherheit und Prüfung
 
-- 51 automatische Tests bestanden
+- 52 automatische Tests bestanden
 - Kein eigener WebSocket-Proxy und kein offener Port `47831`
 - Keine dauerhafte Variable `CODEX_APP_SERVER_WS_URL`
-- SHA-256 des Installers: `89382A847F148E755099820A579AE5B079D8101B0F3475A2DF9AD0726750A33D`
+- SHA-256 des Installers: `B37BA984CC360B5B98DD1C99B9AD465A96E471CAACF8DCDA6AE0FE7698B9EAFB`

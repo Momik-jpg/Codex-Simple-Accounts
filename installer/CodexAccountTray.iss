@@ -52,7 +52,7 @@ Name: "{userdesktop}\Codex-Konten"; Filename: "{app}\{#AppExeName}"; Tasks: desk
 Name: "desktopicon"; Description: "Desktop-Verknüpfung erstellen"; GroupDescription: "Zusätzliche Symbole:"; Flags: unchecked
 
 [Run]
-Filename: "{sys}\explorer.exe"; Parameters: """{app}\{#AppExeName}"""; Description: "Codex-Konten unabhängig starten"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "Codex-Konten starten"; Flags: nowait postinstall skipifsilent
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
