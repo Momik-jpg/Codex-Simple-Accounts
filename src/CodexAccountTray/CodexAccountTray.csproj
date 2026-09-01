@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Codex-Konten</AssemblyName>
+    <RootNamespace>CodexAccountTray</RootNamespace>
+    <Version>1.5.5</Version>
+    <AssemblyVersion>1.5.5.0</AssemblyVersion>
+    <FileVersion>1.5.5.0</FileVersion>
+    <Product>Codex-Konten</Product>
+    <Company>Andrin</Company>
+    <Description>Lokale Verwaltung mehrerer Codex-Konten</Description>
+    <ApplicationIcon>..\..\assets\Codex-Konten.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\Codex-Konten.ico"
+                      Link="Assets\Codex-Konten.ico"
+                      LogicalName="CodexAccountTray.AppIcon.ico" />
+  </ItemGroup>
+
+</Project>

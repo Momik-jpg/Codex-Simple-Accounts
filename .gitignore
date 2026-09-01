@@ -1,0 +1,26 @@
+# Build output
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+coverage*.xml
+
+# Local tools and IDE state
+.vs/
+.idea/
+.serena/
+.superpowers/
+graphify-out/
+docs/design/
+docs/superpowers/
+*.user
+*.suo
+*.log
+
+# Local dependencies and credentials
+node_modules/
+auth.json
+account-*.dat
+settings.json
+.env
+.env.*
