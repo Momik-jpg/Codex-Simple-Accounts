@@ -1,5 +1,7 @@
 # Codex Simple Accounts
 
+[![CI](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/workflows/ci.yml/badge.svg)](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Eine lokale Windows-App zum Verwalten und Wechseln mehrerer Konten in der Codex-Desktop-App.
 
 ## Funktionen
