@@ -14,6 +14,18 @@ Eine lokale Windows-App zum Verwalten und Wechseln mehrerer Konten in der Codex-
 - Kontodaten mit Windows-DPAPI verschlüsseln
 - Notfall-Schalter zum Abbrechen eines Wechsels und Ausschalten von Auto-Swap
 
+## Sicherer Wechselablauf
+
+Die App hält Kontodaten lokal verschlüsselt und führt den Wechsel in einem klaren Ablauf aus.
+
+```mermaid
+flowchart LR
+    A["Konto auswählen"] --> B["Codex Desktop beenden"]
+    B --> C["auth.json atomar ersetzen"]
+    C --> D["Codex Desktop neu starten"]
+    E["Lokale Kontodaten<br/>Windows DPAPI"] --> C
+```
+
 ## Installation
 
 1. Unter [Releases](https://github.com/Momik-jpg/Codex-Simple-Accounts/releases) den neusten `Codex-Konten-Installer.exe` herunterladen.
