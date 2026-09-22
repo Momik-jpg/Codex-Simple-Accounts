@@ -51,3 +51,8 @@ dotnet test .\CodexAccountTray.sln -c Release
 ## Hinweis
 
 Dieses Projekt ist ein unabhängiges Hilfsprogramm und nicht mit OpenAI verbunden oder von OpenAI unterstützt.
+
+
+## Lizenz
+
+MIT – siehe [LICENSE](LICENSE).
