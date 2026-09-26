@@ -19,11 +19,30 @@ public sealed class AppSettingsStore
     {
         if (!File.Exists(_settingsFile))
         {
-            return new AppSettings(WindowsUserProfile.Desktop());
+            return CreateDefaultSettings();
         }
 
-        return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_settingsFile))
-            ?? new AppSettings(WindowsUserProfile.Desktop());
+        try
+        {
+            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_settingsFile))
+                ?? CreateDefaultSettings();
+        }
+        catch (JsonException)
+        {
+            PreserveCorruptSettingsFile();
+            return CreateDefaultSettings();
+        }
+    }
+
+    private static AppSettings CreateDefaultSettings()
+    {
+        return new AppSettings(WindowsUserProfile.Desktop());
+    }
+
+    private void PreserveCorruptSettingsFile()
+    {
+        string backupFile = $"{_settingsFile}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.bak";
+        File.Move(_settingsFile, backupFile);
     }
 
     public void Save(AppSettings settings)
