@@ -1,0 +1,197 @@
+{
+  "type": "object",
+  "properties": {
+    "goal": {
+      "type": "string"
+    },
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "writing",
+        "research",
+        "code",
+        "visual",
+        "other"
+      ]
+    },
+    "scores": {
+      "type": "object",
+      "properties": {
+        "reasoning": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "ambiguity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "coupling": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "visual": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "failure_impact": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "verification_difficulty": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        }
+      },
+      "required": [
+        "reasoning",
+        "ambiguity",
+        "coupling",
+        "visual",
+        "failure_impact",
+        "verification_difficulty"
+      ],
+      "additionalProperties": false
+    },
+    "workload": {
+      "type": "string",
+      "enum": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL"
+      ]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "inverse_visual_reconstruction": {
+      "type": "boolean"
+    },
+    "shared_mutable_artifact": {
+      "type": "boolean"
+    },
+    "requires_images": {
+      "type": "boolean"
+    },
+    "read_only_task": {
+      "type": "boolean"
+    },
+    "stagnant_attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100000
+    },
+    "stall_cause": {
+      "type": "string",
+      "enum": [
+        "none",
+        "reasoning",
+        "method",
+        "input",
+        "tool",
+        "permission",
+        "compute",
+        "unknown"
+      ]
+    },
+    "blocking_reason": {
+      "type": "string"
+    },
+    "parallel_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "objective": {
+            "type": "string"
+          },
+          "independent": {
+            "type": "boolean"
+          },
+          "shared_writes": {
+            "type": "boolean"
+          },
+          "benefit": {
+            "type": "string",
+            "enum": [
+              "clear",
+              "uncertain",
+              "none"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "now",
+              "after_checkpoint"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "routine",
+              "review",
+              "research"
+            ]
+          }
+        },
+        "required": [
+          "objective",
+          "independent",
+          "shared_writes",
+          "benefit",
+          "stage",
+          "role"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 3
+    },
+    "acceptance_checks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 6
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 6
+    }
+  },
+  "required": [
+    "goal",
+    "task_type",
+    "scores",
+    "workload",
+    "confidence",
+    "inverse_visual_reconstruction",
+    "shared_mutable_artifact",
+    "requires_images",
+    "read_only_task",
+    "stagnant_attempts",
+    "stall_cause",
+    "blocking_reason",
+    "parallel_candidates",
+    "acceptance_checks",
+    "evidence"
+  ],
+  "additionalProperties": false
+}
