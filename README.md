@@ -13,6 +13,7 @@ Eine lokale Windows-App zum Verwalten und Wechseln mehrerer Konten in der Codex-
 - Kontonamen aus der lokalen Anmeldung anzeigen
 - Kontodaten mit Windows-DPAPI verschlüsseln
 - Notfall-Schalter zum Abbrechen eines Wechsels und Ausschalten von Auto-Swap
+- Aufgabenrouter mit regelbasierter Modellwahl und gesperrtem Kontowechsel während des Laufs
 
 ## Sicherer Wechselablauf
 
