@@ -24,11 +24,13 @@ static class Program
             CodexCommand command = CodexLocator.Find();
             string codexHome = Path.Combine(WindowsUserProfile.ProfilePath(), ".codex");
             var desktopRuntime = new ProxyDesktopRuntime();
+            var taskRouterActivity = new TaskRouterActivity();
             using var processManager = new SmoothCodexProcessManager(
                 accountStore,
                 command,
                 codexHome,
-                desktopRuntime);
+                desktopRuntime,
+                taskRouterActivity);
             var protocolClient = new CodexProtocolClient(command);
             var loginService = new AccountLoginService(
                 paths,
@@ -41,7 +43,7 @@ static class Program
                 protocolClient,
                 processManager,
                 TimeSpan.FromSeconds(30),
-                () => settingsStore.Load().AutoSwitchEnabled);
+                () => settingsStore.Load().AutoSwitchEnabled && !taskRouterActivity.IsActive);
             using var context = new TrayApplicationContext(
                 accountStore,
                 loginService,
@@ -49,8 +51,10 @@ static class Program
                 monitor,
                 settingsStore,
                 isChatGptRunning: () => desktopRuntime.IsRunning,
-                showOnStart: LaunchMode.ShouldShow(args));
-            TaskRouterIntegration.Attach(context.MainForm!, command, processManager, settingsStore);
+                showOnStart: LaunchMode.ShouldShow(args),
+                taskRouterActivity: taskRouterActivity);
+            TaskRouterIntegration.Attach(
+                context.MainForm!, command, processManager, settingsStore, taskRouterActivity);
             Application.Run(context);
         }
         catch (Exception exception)
