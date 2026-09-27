@@ -183,6 +183,38 @@ public sealed class SmoothCodexProcessManagerTests
         }
     }
 
+    [Fact]
+    public async Task RouterRun_BlocksAccountSwitchAndLogout()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"RouterGuard-{Guid.NewGuid():N}");
+        var store = new AccountStore(new AppPaths(Path.Combine(root, "tray")));
+        store.Save(1, Auth(1));
+        var activity = new TaskRouterActivity();
+        var manager = new SmoothCodexProcessManager(
+            store,
+            new CodexCommand("dotnet", [typeof(FakeCodex.Marker).Assembly.Location]),
+            Path.Combine(root, ".codex"),
+            new FakeDesktopRuntime(),
+            activity);
+        try
+        {
+            using IDisposable router = activity.BeginRouterRun();
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => manager.StartAsync(1, false, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => manager.LogoutAsync(1, CancellationToken.None));
+
+            Assert.True(store.IsLoggedIn(1));
+            Assert.False(File.Exists(Path.Combine(manager.ActiveCodexHome, "auth.json")));
+        }
+        finally
+        {
+            manager.Dispose();
+            Directory.Delete(root, true);
+        }
+    }
+
     private static byte[] Auth(int account) => JsonSerializer.SerializeToUtf8Bytes(new
     {
         tokens = new { account_id = $"account-{account}", id_token = "a.e30." }
