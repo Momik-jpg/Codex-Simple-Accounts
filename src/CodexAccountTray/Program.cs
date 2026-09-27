@@ -50,6 +50,7 @@ static class Program
                 settingsStore,
                 isChatGptRunning: () => desktopRuntime.IsRunning,
                 showOnStart: LaunchMode.ShouldShow(args));
+            TaskRouterIntegration.Attach(context.MainForm!, command, processManager, settingsStore);
             Application.Run(context);
         }
         catch (Exception exception)
