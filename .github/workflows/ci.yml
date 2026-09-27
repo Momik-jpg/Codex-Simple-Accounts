@@ -17,5 +17,27 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: dotnet restore CodexAccountTray.sln
-      - run: dotnet test CodexAccountTray.sln -c Release --no-restore
+      - run: dotnet test CodexAccountTray.sln -c Release --no-restore --logger "trx;LogFileName=tests.trx"
+      - name: Offline routing tests (no credentials or inference)
+        run: python -m unittest discover -s tools/task-router/tests -v
+      - name: Verify router publish payload
+        shell: pwsh
+        run: |
+          dotnet publish src/CodexAccountTray/CodexAccountTray.csproj -c Release --no-restore -o artifacts/router-smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $required = @('desktop_entry.py', 'router.py', 'routing_policy.json', 'assessment.schema.json', 'prompts/triage.txt', 'task-router/SKILL.md')
+          foreach ($file in $required) {
+            if (-not (Test-Path "artifacts/router-smoke/TaskRouter/$file")) { throw "Missing router asset: $file" }
+          }
+          python artifacts/router-smoke/TaskRouter/router.py demo umr
+      - name: Test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/TestResults/*.trx'
+          retention-days: 7
