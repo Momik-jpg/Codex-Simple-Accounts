@@ -7,7 +7,9 @@ public sealed class TaskRouterForm : Form
 {
     private readonly TaskRouterLauncher _launcher;
     private readonly Func<string> _codexHome;
+    private readonly TaskRouterActivity _activity;
     private readonly Func<string?> _startBlocker;
+    private readonly Action<string>? _rememberProject;
     private readonly TextBox _project = new() { Dock = DockStyle.Fill };
     private readonly TextBox _policy = new() { Dock = DockStyle.Fill, PlaceholderText = "Optional: eigene routing_policy.json" };
     private readonly TextBox _task = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, MaxLength = 60000, AcceptsReturn = true };
@@ -23,11 +25,23 @@ public sealed class TaskRouterForm : Form
     private CancellationTokenSource? _cancellation;
     private string? _lastRun;
 
-    public TaskRouterForm(TaskRouterLauncher launcher, Func<string> codexHome, Func<string?> startBlocker)
+    public TaskRouterForm(
+        TaskRouterLauncher launcher,
+        Func<string> codexHome,
+        TaskRouterActivity activity,
+        Func<string?> startBlocker,
+        string? initialProjectDirectory = null,
+        Action<string>? rememberProject = null)
     {
         _launcher = launcher;
         _codexHome = codexHome;
+        _activity = activity;
         _startBlocker = startBlocker;
+        _rememberProject = rememberProject;
+        if (!string.IsNullOrWhiteSpace(initialProjectDirectory) && Directory.Exists(initialProjectDirectory))
+        {
+            _project.Text = Path.GetFullPath(initialProjectDirectory);
+        }
         Text = "Auto-Aufgabe · Codex Konten";
         ClientSize = new Size(920, 790);
         MinimumSize = new Size(820, 740);
@@ -60,7 +74,7 @@ public sealed class TaskRouterForm : Form
             layout.RowStyles.Add(style);
         layout.Controls.Add(new Label { Dock = DockStyle.Fill, Text =
             "Auftrag eingeben → KI-Einstufung → feste Regeln → neue Codex-Sitzung.\n" +
-            "Nutzt die aktuelle CLI-Anmeldung des Kontowechslers. Während des Laufs kein Konto wechseln.\n" +
+            "Nutzt die aktuelle CLI-Anmeldung; Kontowechsel sind während des Laufs automatisch gesperrt.\n" +
             "Die Einstufung verbraucht Kontingent. Laufende Chats bleiben unverändert. Python 3.10+ erforderlich." }, 0, 0);
         layout.Controls.Add(PathRow("Projekt", _project, () =>
         {
@@ -119,16 +133,52 @@ public sealed class TaskRouterForm : Form
     private async Task LaunchAsync(bool execute)
     {
         if (_cancellation is not null) return;
+        var request = new TaskRouterRequest(_project.Text.Trim(), _task.Text, _images.ToArray(),
+            (int)_agents.Value, _write.Checked, string.IsNullOrWhiteSpace(_policy.Text) ? null : _policy.Text.Trim());
+        try
+        {
+            TaskRouterLauncher.Validate(request);
+        }
+        catch (Exception exception) when (exception is ArgumentException or PathTooLongException)
+        {
+            _report.Text = "Eingabe prüfen: " + exception.Message;
+            return;
+        }
         string? blocker = _startBlocker();
         if (blocker is not null) { MessageBox.Show(this, blocker, "Aufgabenstart", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+        IDisposable activity;
+        try
+        {
+            activity = _activity.BeginRouterRun();
+        }
+        catch (InvalidOperationException exception)
+        {
+            MessageBox.Show(this, exception.Message, "Aufgabenstart", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        using (activity)
+        {
+            try
+            {
+                _rememberProject?.Invoke(request.ProjectDirectory);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(this, "Projektordner konnte nicht gespeichert werden: " + exception.Message,
+                    "Einstellungen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            await RunRequestAsync(request, execute);
+        }
+    }
+
+    private async Task RunRequestAsync(TaskRouterRequest request, bool execute)
+    {
         _cancellation = new CancellationTokenSource();
         _plan.Enabled = _run.Enabled = false; _cancel.Enabled = true;
         _report.Text = execute ? "Einstufung und Ausführung im neuen Terminal. Freigaben dort beantworten."
                                : "Modellkatalog und kurze Einstufung werden abgefragt. Der Projektauftrag wird noch nicht ausgeführt.";
         try
         {
-            var request = new TaskRouterRequest(_project.Text.Trim(), _task.Text, _images.ToArray(),
-                (int)_agents.Value, _write.Checked, string.IsNullOrWhiteSpace(_policy.Text) ? null : _policy.Text.Trim());
             TaskRouterResult result = await _launcher.RunAsync(request, _codexHome(), execute, _cancellation.Token);
             _lastRun = result.RunDirectory; _logs.Enabled = true;
             _report.Text = result.Report;
