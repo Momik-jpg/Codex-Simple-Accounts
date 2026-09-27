@@ -4,7 +4,8 @@ namespace CodexAccountTray;
 public static class TaskRouterIntegration
 {
     public static void Attach(Form manager, CodexCommand codex,
-        ICodexProcessManager processManager, AppSettingsStore settingsStore)
+        ICodexProcessManager processManager, AppSettingsStore settingsStore,
+        TaskRouterActivity taskRouterActivity)
     {
         var button = new RoundedButton
         {
@@ -24,13 +25,27 @@ public static class TaskRouterIntegration
         };
         button.Click += (_, _) =>
         {
+            AppSettings settings = settingsStore.Load();
             using var form = new TaskRouterForm(new TaskRouterLauncher(codex),
                 () => processManager.ActiveCodexHome,
+                taskRouterActivity,
                 () => settingsStore.Load().AutoSwitchEnabled
-                    ? "Auto-Swap vor einem Router-Lauf ausschalten. Während des Laufs kein Konto wechseln."
+                    ? "Auto-Swap vor einem Router-Lauf ausschalten."
+                    : taskRouterActivity.IsActive
+                        ? "Eine Auto-Aufgabe läuft bereits."
                     : processManager.IsRunning || processManager.PendingAccount is not null
                         ? "Der Kontowechsel läuft noch. Bitte danach die Aufgabe starten."
-                        : null);
+                        : null,
+                settings.ProjectFolder,
+                projectDirectory =>
+                {
+                    AppSettings current = settingsStore.Load();
+                    if (!string.Equals(current.ProjectFolder, projectDirectory,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        settingsStore.Save(current with { ProjectFolder = projectDirectory });
+                    }
+                });
             form.ShowDialog(manager);
         };
         manager.Controls.Add(button);
