@@ -13,6 +13,7 @@ public sealed class AccountManagerForm : Form
     private readonly ICodexProcessManager _processManager;
     private readonly LimitMonitor _monitor;
     private readonly AppSettingsStore _settingsStore;
+    private readonly TaskRouterActivity _taskRouterActivity;
     private readonly Dictionary<int, Label> _statusLabels = [];
     private readonly Dictionary<int, Label> _nameLabels = [];
     private readonly Dictionary<int, Label> _limitLabels = [];
@@ -30,13 +31,15 @@ public sealed class AccountManagerForm : Form
         ICodexProcessManager processManager,
         LimitMonitor monitor,
         AppSettingsStore settingsStore,
-        Icon icon)
+        Icon icon,
+        TaskRouterActivity? taskRouterActivity = null)
     {
         _accountStore = accountStore;
         _loginService = loginService;
         _processManager = processManager;
         _monitor = monitor;
         _settingsStore = settingsStore;
+        _taskRouterActivity = taskRouterActivity ?? new TaskRouterActivity();
 
         Text = "Codex Konten";
         Icon = icon;
@@ -73,6 +76,7 @@ public sealed class AccountManagerForm : Form
 
     public void RefreshView()
     {
+        bool routerActive = _taskRouterActivity.IsActive;
         int[] accounts = _accountStore.AccountNumbers.ToArray();
         if (!_accountCards.Keys.Order().SequenceEqual(accounts))
         {
@@ -91,10 +95,10 @@ public sealed class AccountManagerForm : Form
             _accountCards[account].IsActive = active || pending;
             _nameLabels[account].Text = _accountStore.DisplayName(account);
             _loginButtons[account].Text = loggedIn ? "Neu anmelden" : "Anmelden";
-            _logoutButtons[account].Enabled = loggedIn && !_processManager.IsRunning;
+            _logoutButtons[account].Enabled = loggedIn && !_processManager.IsRunning && !routerActive;
             _startButtons[account].Text = pending ? "Bereit" : active ? "Öffnen" : "Wechseln";
             _startButtons[account].Enabled = loggedIn && !_processManager.IsRunning &&
-                                             _processManager.PendingAccount is null;
+                                             _processManager.PendingAccount is null && !routerActive;
 
             _monitor.Current.TryGetValue(account, out AccountLimits? limits);
             string stale = limits?.IsStale == true ? "  · veraltet" : string.Empty;
@@ -104,6 +108,7 @@ public sealed class AccountManagerForm : Form
         }
 
         _autoSwitch.Checked = _settingsStore.Load().AutoSwitchEnabled;
+        _autoSwitch.Enabled = !routerActive;
     }
 
     private void BuildLayout()
@@ -168,6 +173,11 @@ public sealed class AccountManagerForm : Form
         _autoSwitch.CheckedChanged += (_, _) =>
         {
             AppSettings current = _settingsStore.Load();
+            if (_taskRouterActivity.IsActive)
+            {
+                _autoSwitch.Checked = current.AutoSwitchEnabled;
+                return;
+            }
             if (current.AutoSwitchEnabled != _autoSwitch.Checked)
             {
                 _settingsStore.Save(current with { AutoSwitchEnabled = _autoSwitch.Checked });
