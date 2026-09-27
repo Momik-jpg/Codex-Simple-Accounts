@@ -18,6 +18,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
     private readonly AccountManagerForm _managerForm;
     private readonly HotkeyWindow _hotkey;
     private readonly AppSettingsStore _settingsStore;
+    private readonly TaskRouterActivity _taskRouterActivity;
     private readonly AgentLoopTaskStatusReader _taskStatusReader;
     private readonly ChatGptStartDetector _chatGptDetector;
     private readonly System.Windows.Forms.Timer _chatGptTimer;
@@ -32,13 +33,15 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         AppSettingsStore settingsStore,
         Func<bool>? isChatGptRunning = null,
         bool showOnStart = false,
-        AgentLoopTaskStatusReader? taskStatusReader = null)
+        AgentLoopTaskStatusReader? taskStatusReader = null,
+        TaskRouterActivity? taskRouterActivity = null)
     {
         _accountStore = accountStore;
         _loginService = loginService;
         _processManager = processManager;
         _monitor = monitor;
         _settingsStore = settingsStore;
+        _taskRouterActivity = taskRouterActivity ?? new TaskRouterActivity();
         _taskStatusReader = taskStatusReader ?? new AgentLoopTaskStatusReader();
         _chatGptDetector = new ChatGptStartDetector(isChatGptRunning ?? IsChatGptRunning);
         _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
@@ -66,11 +69,13 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
             processManager,
             monitor,
             settingsStore,
-            _icon);
+            _icon,
+            _taskRouterActivity);
         MainForm = _managerForm;
         _notifyIcon.DoubleClick += (_, _) => _managerForm.ShowWindow();
         _monitor.LimitsUpdated += OnLimitsUpdated;
         _monitor.Notice += OnNotice;
+        _taskRouterActivity.Changed += OnTaskRouterActivityChanged;
         _hotkey = new HotkeyWindow(() => _ = RefreshLimitsAsync());
         if (!_hotkey.IsRegistered)
         {
@@ -97,6 +102,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         _disposed = true;
         _monitor.LimitsUpdated -= OnLimitsUpdated;
         _monitor.Notice -= OnNotice;
+        _taskRouterActivity.Changed -= OnTaskRouterActivityChanged;
         _chatGptTimer.Stop();
         _chatGptTimer.Tick -= OnChatGptCheck;
         _chatGptTimer.Dispose();
@@ -118,6 +124,14 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
             Font = new Font("Segoe UI Semibold", 10.5f)
         };
         _menu.Items.Add(heading);
+        if (_taskRouterActivity.IsActive)
+        {
+            _menu.Items.Add(new ToolStripMenuItem("Auto-Aufgabe läuft · Kontowechsel gesperrt")
+            {
+                Enabled = false,
+                ForeColor = Color.FromArgb(108, 201, 145)
+            });
+        }
         _menu.Items.Add(new ToolStripSeparator());
 
         foreach (int account in _accountStore.AccountNumbers)
@@ -150,11 +164,18 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         var autoSwap = new ToolStripMenuItem("Auto-Swap: 5 h 1 % · Woche 0 %")
         {
             Checked = _settingsStore.Load().AutoSwitchEnabled,
-            CheckOnClick = true
+            CheckOnClick = true,
+            Enabled = !_taskRouterActivity.IsActive
         };
         autoSwap.CheckedChanged += (_, _) =>
         {
             AppSettings current = _settingsStore.Load();
+            if (_taskRouterActivity.IsActive)
+            {
+                autoSwap.Checked = current.AutoSwitchEnabled;
+                ShowNotice("Auto-Swap ist während einer Auto-Aufgabe gesperrt.");
+                return;
+            }
             if (current.AutoSwitchEnabled != autoSwap.Checked)
             {
                 _settingsStore.Save(current with { AutoSwitchEnabled = autoSwap.Checked });
@@ -202,7 +223,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         {
             var start = new ToolStripMenuItem("Codex-App öffnen")
             {
-                Enabled = true
+                Enabled = !_taskRouterActivity.IsActive
             };
             start.Click += async (_, _) => await StartAccountAsync(account);
             item.DropDownItems.Add(start);
@@ -213,7 +234,10 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         item.DropDownItems.Add(login);
         if (loggedIn)
         {
-            var logout = new ToolStripMenuItem("Abmelden");
+            var logout = new ToolStripMenuItem("Abmelden")
+            {
+                Enabled = !_taskRouterActivity.IsActive
+            };
             logout.Click += async (_, _) => await LogoutAsync(account);
             item.DropDownItems.Add(logout);
         }
@@ -314,6 +338,15 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
     private void OnLimitsUpdated(object? sender, EventArgs eventArgs)
     {
         _uiContext.Post(_ => RebuildMenu(), null);
+    }
+
+    private void OnTaskRouterActivityChanged(object? sender, EventArgs eventArgs)
+    {
+        _uiContext.Post(_ =>
+        {
+            RebuildMenu();
+            _managerForm.RefreshView();
+        }, null);
     }
 
     private void OnChatGptCheck(object? sender, EventArgs eventArgs)
