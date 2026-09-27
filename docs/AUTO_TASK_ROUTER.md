@@ -21,9 +21,11 @@ Die Bewertung ist eine Startheuristik, kein trainierter oder empirisch validiert
 - Aktuelle, angemeldete Codex CLI mit den verwendeten Runtime-/Config-Schaltern. Ältere Clients sollen mit einem sichtbaren Fehler abbrechen, nicht still ohne Regeln starten.
 - Ein Modell aus dem konfigurierten Standardprofil für die Einstufung. Modellnamen in der JSON-Datei sind Präferenzen, keine Verfügbarkeitsgarantie.
 
-Gewünschtes Konto zuerst im Kontowechsler aktivieren. **Auto-Swap während Router-Läufen ausschalten und kein Konto wechseln.** Bei aktivem Auto-Swap oder laufendem Kontowechsel lässt die Oberfläche keinen Router-Lauf starten. Die Integration schreibt weder `auth.json` noch Kontoeinstellungen; sie setzt `CODEX_HOME` für ihren Kindprozess auf das aktive Codex-Home des Kontowechslers. Eigene Provider-/API-Key-Konfigurationen der CLI bleiben zu beachten.
+Gewünschtes Konto zuerst im Kontowechsler aktivieren und **Auto-Swap vor dem Router-Lauf ausschalten**. Bei aktivem Auto-Swap oder laufendem Kontowechsel lässt die Oberfläche keinen Router-Lauf starten. Sobald der Router die Anmeldung reserviert hat, sperrt dieselbe atomare Laufwache manuelle Kontowechsel, Abmeldungen und automatische Rotation bis zum Prozessende. Die Tray-Oberfläche zeigt die Sperre an; verspätete oder konkurrierende Wechsel werden zusätzlich im Prozessmanager abgewiesen. Externe Programme und direkte Änderungen an `auth.json` kann die App nicht sperren.
 
-Im Dialog Projektordner, Auftrag und optional Referenzbilder auswählen. Die Agentenobergrenze darf 0, 1 oder 2 sein; sie erzwingt keine Delegation. Schreibzugriff ist standardmässig aus. Ein Umsetzungsauftrag startet ohne explizite Schreibfreigabe nicht.
+Die Integration schreibt selbst weder `auth.json` noch Kontoeinstellungen; sie setzt `CODEX_HOME` für ihren Kindprozess auf das aktive Codex-Home des Kontowechslers. Eigene Provider-/API-Key-Konfigurationen der CLI bleiben zu beachten.
+
+Im Dialog Projektordner, Auftrag und optional Referenzbilder auswählen. Der zuletzt erfolgreich validierte Projektordner wird für den nächsten Aufruf wieder eingesetzt. Die Agentenobergrenze darf 0, 1 oder 2 sein; sie erzwingt keine Delegation. Schreibzugriff ist standardmässig aus. Ein Umsetzungsauftrag startet ohne explizite Schreibfreigabe nicht.
 
 **Nur einstufen** zeigt die Entscheidung, ohne den Projektauftrag auszuführen. **Automatisch starten** liest einen frischen Katalog, stuft neu ein und öffnet eine interaktive Codex-Konsole. Eine zuvor angesehene Vorschau wird bewusst nicht als aktuelle Freigabe wiederverwendet. Daher verursachen Vorschau plus Start zwei Einstufungsaufrufe. Rückfragen zu Aktionen werden in der Codex-Konsole beantwortet.
 
@@ -62,7 +64,7 @@ python -m unittest discover -s tools/task-router/tests -v
 python tools/task-router/router.py demo umr
 ```
 
-Die Python-Tests verwenden synthetische Kataloge und einen lokalen Fake-Codex, keine bezahlten Modellaufrufe. Die .NET-Tests prüfen Eingaben, Argumenttrennung, Schreibfreigabe, `CODEX_HOME` und Ergebnisdarstellung. CI prüft zusätzlich die Router-Dateien im Publish-Ausgabeverzeichnis. Ein erfolgreicher CI-Lauf ersetzt keinen visuellen Windows-Test und keinen echten Lauf mit einem angemeldeten Codex-Konto.
+Die Python-Tests verwenden synthetische Kataloge und einen lokalen Fake-Codex, keine bezahlten Modellaufrufe. Die .NET-Tests prüfen Eingaben, Argumenttrennung, Schreibfreigabe, `CODEX_HOME`, Ergebnisdarstellung und die gegenseitige Sperre von Router-Lauf und Kontowechsel. CI prüft zusätzlich die Router-Dateien im Publish-Ausgabeverzeichnis. Ein erfolgreicher CI-Lauf ersetzt keinen visuellen Windows-Test und keinen echten Lauf mit einem angemeldeten Codex-Konto.
 
 ## Technische Quellen
 
