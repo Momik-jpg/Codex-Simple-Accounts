@@ -24,7 +24,10 @@ public sealed class AccountManagerForm : Form
     private readonly Dictionary<int, AccountCardPanel> _accountCards = [];
     private readonly CheckBox _autoSwitch = new();
     private readonly Panel _accountList = new();
+    private readonly Label _activityStatus = new();
     private RoundedButton _addAccountButton = null!;
+    private bool _operationInProgress;
+    private string? _operationDescription;
 
     public AccountManagerForm(
         AccountStore accountStore,
@@ -58,6 +61,7 @@ public sealed class AccountManagerForm : Form
         FormClosing += HideInsteadOfClose;
         _monitor.LimitsUpdated += (_, _) => SafeRefresh();
         _processManager.ProcessExited += (_, _) => SafeRefresh();
+        _taskRouterActivity.Changed += OnTaskRouterActivityChanged;
         RefreshView();
     }
 
@@ -75,10 +79,19 @@ public sealed class AccountManagerForm : Form
         NativeTheme.ApplyDarkTitleBar(Handle, Background);
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _taskRouterActivity.Changed -= OnTaskRouterActivityChanged;
+        }
+        base.Dispose(disposing);
+    }
+
     public void RefreshView()
     {
         bool routerActive = _taskRouterActivity.IsActive;
-        bool accountActivity = _taskRouterActivity.IsBusy;
+        bool accountActivity = _operationInProgress || _taskRouterActivity.IsBusy;
         int[] accounts = _accountStore.AccountNumbers.ToArray();
         if (!_accountCards.Keys.Order().SequenceEqual(accounts))
         {
@@ -90,7 +103,7 @@ public sealed class AccountManagerForm : Form
             bool active = _processManager.ActiveAccount == account;
             bool pending = _processManager.PendingAccount == account;
             _statusLabels[account].Text = pending
-                ? "ChatGPT wird neu gestartet"
+                ? "Kontowechsel läuft …"
                 : active ? "Aktiv" : loggedIn ? "Angemeldet" : "Nicht angemeldet";
             _statusLabels[account].ForeColor = active || pending ? Success : Muted;
             _activeIndicators[account].Visible = active || pending;
@@ -99,7 +112,7 @@ public sealed class AccountManagerForm : Form
             _loginButtons[account].Text = loggedIn ? "Neu anmelden" : "Anmelden";
             _loginButtons[account].Enabled = !_processManager.IsRunning && !accountActivity;
             _logoutButtons[account].Enabled = loggedIn && !_processManager.IsRunning && !accountActivity;
-            _startButtons[account].Text = pending ? "Bereit" : active ? "Öffnen" : "Wechseln";
+            _startButtons[account].Text = pending ? "Wechselt …" : active ? "Codex öffnen" : "Wechseln";
             _startButtons[account].Enabled = loggedIn && !_processManager.IsRunning &&
                                              _processManager.PendingAccount is null && !accountActivity;
 
@@ -118,6 +131,16 @@ public sealed class AccountManagerForm : Form
             : accountActivity
                 ? "Auto-Swap pausiert · Kontoaktion läuft"
                 : "Auto-Swap: 5 h 1 % · Woche 0 %";
+
+        int? pendingAccount = _processManager.PendingAccount;
+        _activityStatus.Text = routerActive
+            ? "Auto-Aufgabe läuft · Kontowechsel und Auto-Swap sind geschützt."
+            : _operationDescription
+              ?? (pendingAccount is not null
+                  ? $"Wechsel zu {_accountStore.DisplayName(pendingAccount.Value)} läuft · ChatGPT wird neu gestartet."
+                  : string.Empty);
+        _activityStatus.Visible = _activityStatus.Text.Length > 0;
+        _activityStatus.ForeColor = routerActive ? Success : Color.FromArgb(112, 170, 240);
     }
 
     private void BuildLayout()
@@ -140,17 +163,25 @@ public sealed class AccountManagerForm : Form
         };
         Controls.Add(subtitle);
 
+        _activityStatus.AutoSize = false;
+        _activityStatus.Location = new Point(33, 92);
+        _activityStatus.Size = new Size(790, 24);
+        _activityStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _activityStatus.Font = new Font("Segoe UI Variable Text Semibold", 9.5f);
+        _activityStatus.Visible = false;
+        Controls.Add(_activityStatus);
+
         _addAccountButton = CreateButton("Konto hinzufügen", new Point(850, 50), new Size(160, 42), true);
         _addAccountButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _addAccountButton.Click += async (_, _) =>
         {
             int account = _accountStore.NextAccountNumber();
-            await LoginAsync(account, _addAccountButton);
+            await LoginAsync(account);
         };
         Controls.Add(_addAccountButton);
 
-        _accountList.Location = new Point(28, 106);
-        _accountList.Size = new Size(984, 500);
+        _accountList.Location = new Point(28, 120);
+        _accountList.Size = new Size(984, 486);
         _accountList.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _accountList.AutoScroll = true;
         _accountList.BackColor = Background;
@@ -296,18 +327,21 @@ public sealed class AccountManagerForm : Form
         panel.Controls.Add(limits);
 
         var login = CreateButton("Anmelden", new Point(620, 23), new Size(130, 40), false);
+        login.AccessibleName = $"{_accountStore.DisplayName(account)} anmelden";
         login.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        login.Click += async (_, _) => await LoginAsync(account, login);
+        login.Click += async (_, _) => await LoginAsync(account);
         _loginButtons[account] = login;
         panel.Controls.Add(login);
 
         var logout = CreateButton("Abmelden", new Point(760, 23), new Size(98, 40), false);
+        logout.AccessibleName = $"{_accountStore.DisplayName(account)} abmelden";
         logout.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         logout.Click += async (_, _) => await LogoutAsync(account);
         _logoutButtons[account] = logout;
         panel.Controls.Add(logout);
 
         var start = CreateButton("Öffnen", new Point(868, 23), new Size(96, 40), true);
+        start.AccessibleName = $"{_accountStore.DisplayName(account)} in Codex öffnen oder dorthin wechseln";
         start.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         start.Click += async (_, _) => await StartAccountAsync(account);
         _startButtons[account] = start;
@@ -340,9 +374,9 @@ public sealed class AccountManagerForm : Form
         };
     }
 
-    private async Task LoginAsync(int account, RoundedButton button)
+    private async Task LoginAsync(int account)
     {
-        button.Enabled = false;
+        BeginOperation($"{_accountStore.DisplayName(account)} wird angemeldet …");
         try
         {
             await _loginService.LoginAsync(account, CancellationToken.None);
@@ -354,18 +388,13 @@ public sealed class AccountManagerForm : Form
         }
         finally
         {
-            button.Enabled = true;
-            RefreshView();
+            EndOperation();
         }
     }
 
     private async Task StartAccountAsync(int account)
     {
-        foreach (RoundedButton button in _startButtons.Values)
-        {
-            button.Enabled = false;
-        }
-        _startButtons[account].Text = "Wechsle…";
+        BeginOperation($"Wechsel zu {_accountStore.DisplayName(account)} läuft …");
         try
         {
             await _processManager.StartAsync(account, resumeLast: false, CancellationToken.None);
@@ -376,7 +405,7 @@ public sealed class AccountManagerForm : Form
         }
         finally
         {
-            RefreshView();
+            EndOperation();
         }
     }
 
@@ -391,6 +420,7 @@ public sealed class AccountManagerForm : Form
             return;
         }
 
+        BeginOperation($"{_accountStore.DisplayName(account)} wird abgemeldet …");
         try
         {
             if (_processManager is ISmoothSwitchControl control)
@@ -408,7 +438,7 @@ public sealed class AccountManagerForm : Form
         }
         finally
         {
-            RefreshView();
+            EndOperation();
         }
     }
 
@@ -466,6 +496,22 @@ public sealed class AccountManagerForm : Form
             BeginInvoke(RefreshView);
         }
     }
+
+    private void BeginOperation(string description)
+    {
+        _operationInProgress = true;
+        _operationDescription = description;
+        RefreshView();
+    }
+
+    private void EndOperation()
+    {
+        _operationInProgress = false;
+        _operationDescription = null;
+        RefreshView();
+    }
+
+    private void OnTaskRouterActivityChanged(object? sender, EventArgs eventArgs) => SafeRefresh();
 
     private void HideInsteadOfClose(object? sender, FormClosingEventArgs eventArgs)
     {

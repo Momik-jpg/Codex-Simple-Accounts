@@ -43,6 +43,18 @@ public static class TaskRouterIntegration
                     {
                         settingsStore.Save(current with { ProjectFolder = projectDirectory });
                     }
+                },
+                settings.RouterPreferences,
+                preferences =>
+                {
+                    AppSettings current = settingsStore.Load();
+                    TaskRouterPreferences normalized = preferences.Normalize();
+                    settingsStore.Save(current with
+                    {
+                        RouterProfile = normalized.Profile,
+                        RouterEffort = normalized.Effort,
+                        RouterMaxSubagents = normalized.MaxSubagents
+                    });
                 });
             openForm = form;
             try
@@ -67,7 +79,7 @@ public static class TaskRouterIntegration
     {
         var button = new RoundedButton
         {
-            Name = "AutoTaskRouterButton", Text = "Auto-Aufgabe …",
+            Name = "AutoTaskRouterButton", Text = "Neue Auto-Aufgabe",
             Location = new Point(30, manager.ClientSize.Height - 124), Size = new Size(210, 42),
             Anchor = AnchorStyles.Left | AnchorStyles.Bottom,
             BackColor = Color.FromArgb(64, 132, 214), ForeColor = Color.White,
@@ -77,7 +89,7 @@ public static class TaskRouterIntegration
         };
         var label = new Label
         {
-            Text = "Modell, Denkaufwand und Nebenrollen automatisch wählen.",
+            Text = "Automatisch optimieren oder Qualitätsprofil, Denkaufwand und Nebenrollen selbst festlegen.",
             Location = new Point(255, manager.ClientSize.Height - 116),
             Size = new Size(Math.Max(200, manager.ClientSize.Width - 280), 30),
             Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,

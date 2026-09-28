@@ -1,6 +1,6 @@
 # Auto-Aufgabe: Modell und Denkaufwand automatisch auswählen
 
-Die Windows-App bietet im Kontenfenster den zusätzlichen Button **Auto-Aufgabe …**.
+Die Windows-App bietet im Kontenfenster den zusätzlichen Button **Neue Auto-Aufgabe**.
 Der bisherige Kontowechsel, DPAPI-Speicher, `CodexBackend` und die Legacy-Bereinigung werden nicht verändert.
 Der Router startet eine **neue Codex-CLI-Sitzung**. Er verändert keine laufenden Desktop-Chats und überwacht deren Prompts nicht.
 
@@ -10,7 +10,7 @@ Der Router startet eine **neue Codex-CLI-Sitzung**. Er verändert keine laufende
 2. **Ein kurzer Klassifikationsaufruf** bewertet ausschliesslich Auftrag und ausdrücklich beigefügte Bilder. Standard: ein verfügbares Modell aus dem `balanced`-Profil (Sol), gewünschte Stufe `low`. Fehlt das Profil, darf ein freigegebenes höheres Profil verwendet werden. Der tatsächliche Klassifikator steht in `intake.json`.
 3. **Deterministischer lokaler Code** (`decide` in `router.py`) wendet die Gewichte, Schwellen und Qualitätsregeln an. Er wählt Hauptmodell, angebotene Denkstufe und 0–2 geeignete Nebenrollen. Das Modell kann diese Regeln oder die Schreibfreigabe nicht ändern.
 4. **Der Starter** übergibt die Auswahl an einen neuen Codex-Prozess. Der Hauptagent entscheidet innerhalb der konfigurierten Obergrenze, ob/wann er die vorgesehenen Nebenrollen tatsächlich startet.
-5. **Der Nutzer** bestimmt Auftrag, optionale eigene Regeldatei, Agentenobergrenze und ausdrückliche Schreibfreigabe. Subagenten sind in dieser Version nur lesend.
+5. **Der Nutzer** bestimmt Auftrag, optionales Qualitätsprofil und Denkaufwand, eigene Regeldatei, Agentenobergrenze und ausdrückliche Schreibfreigabe. `Automatisch` bleibt die empfohlene Voreinstellung. Subagenten sind in dieser Version nur lesend.
 
 Die Bewertung ist eine Startheuristik, kein trainierter oder empirisch validierter Qualitätsmesser. Die Einstufung kann falsch sein. `XS` bis `XL` beschreibt Arbeitsumfang, keine Stunden-, Kosten- oder Tokenprognose. Eine Versionsnummer und lange Laufzeit sind kein Beweis für entsprechend viele gescheiterte Versuche.
 
@@ -25,13 +25,13 @@ Gewünschtes Konto zuerst im Kontowechsler aktivieren und **Auto-Swap vor dem Ro
 
 Die Integration schreibt selbst weder `auth.json` noch Kontoeinstellungen; sie setzt `CODEX_HOME` für ihren Kindprozess auf das aktive Codex-Home des Kontowechslers. Eigene Provider-/API-Key-Konfigurationen der CLI bleiben zu beachten.
 
-Die Auto-Aufgabe lässt sich im Kontenfenster und direkt im Tray-Menü öffnen. Im Dialog Projektordner, Auftrag und optional Referenzbilder auswählen. Der zuletzt erfolgreich validierte Projektordner wird für den nächsten Aufruf wieder eingesetzt. Projekt, optionale Regeldatei und Referenzbilder werden bereits während der Eingabe geprüft; ungültige Pfade halten die Startaktionen deaktiviert. Die Agentenobergrenze darf 0, 1 oder 2 sein; sie erzwingt keine Delegation. Schreibzugriff ist standardmässig aus und wird bei Aktivierung deutlich hervorgehoben. Ein Umsetzungsauftrag startet ohne explizite Schreibfreigabe nicht.
+Die Auto-Aufgabe lässt sich im Kontenfenster und direkt im Tray-Menü öffnen. Im Dialog Projektordner, Auftrag und optional Referenzbilder auswählen. Der zuletzt erfolgreich validierte Projektordner sowie Qualitätsprofil, Denkaufwand und Agentenobergrenze werden für den nächsten Aufruf wieder eingesetzt; die Schreibfreigabe bleibt nach jedem Öffnen sicherheitshalber aus. Projekt, optionale Regeldatei und Referenzbilder werden bereits während der Eingabe geprüft; ungültige Pfade halten die Startaktionen deaktiviert. Die Agentenobergrenze darf 0, 1 oder 2 sein; sie erzwingt keine Delegation. Schreibzugriff ist standardmässig aus und wird bei Aktivierung deutlich hervorgehoben. Ein Umsetzungsauftrag startet ohne explizite Schreibfreigabe nicht.
 
-**Nur einstufen** zeigt die Entscheidung, ohne den Projektauftrag auszuführen. **Automatisch starten** liest einen frischen Katalog, stuft neu ein und öffnet eine interaktive Codex-Konsole. Eine zuvor angesehene Vorschau wird bewusst nicht als aktuelle Freigabe wiederverwendet. Daher verursachen Vorschau plus Start zwei Einstufungsaufrufe. Rückfragen zu Aktionen werden in der Codex-Konsole beantwortet.
+**Einstufung ansehen** zeigt die Entscheidung, ohne den Projektauftrag auszuführen. Danach wird der Hauptbutton zu **Entscheidung starten**: Die bereits erzeugte strukturierte Einschätzung wird wiederverwendet, während Modellkatalog, Regeln, Profil und Denkaufwand vor dem Start erneut geprüft werden. So benötigt Vorschau plus Start keinen zweiten Klassifikationsaufruf. Ändern sich Auftrag oder Bilder, verfällt die zwischengespeicherte Einschätzung automatisch. **Mit Codex starten** stuft ohne Vorschau ein und öffnet direkt danach eine interaktive Codex-Konsole. Rückfragen zu Aktionen werden dort beantwortet.
 
 Während Einstufung oder Ausführung sind die Eingaben gesperrt, eine Laufanzeige nennt Zustand und Dauer, und ein mehrfacher Abbruch wird verhindert. **Abbrechen** beendet den von diesem Dialog gestarteten Prozessbaum, nicht beliebige ChatGPT-/Codex-Prozesse. **Schliessen** beendet nur den inaktiven Dialog; `Esc` bricht einen laufenden Router-Prozess ab und schliesst sonst das Fenster. `Strg+Enter` stuft nur ein, `Strg+Umschalt+Enter` startet automatisch. Vor und nach dem Lauf zeigt der Dialog die angeforderten Startparameter wie Projekt, Modus, Schreibfreigabe, Nebenrollen, Bilder und Regelquelle an; das ist keine Behauptung über bereits ausgeführte Arbeit. Bereits ausgeführte Änderungen werden nicht rückgängig gemacht. Das vorhandene **Notfall AUS** bleibt der Schalter für den Kontowechsel; für Router-Aufgaben den Abbrechen-Button beziehungsweise das Router-Terminal verwenden.
 
-Anmelden, neu anmelden, Konto hinzufügen, abmelden, manuell wechseln und Auto-Swap benutzen dieselbe Aktivitätssperre. Solange eine Auto-Aufgabe oder Kontoaktion läuft, bleiben konkurrierende Kontofunktionen deaktiviert und werden zusätzlich in der Service-Schicht abgewiesen.
+Anmelden, neu anmelden, Konto hinzufügen, abmelden, manuell wechseln und Auto-Swap benutzen dieselbe Aktivitätssperre. Solange eine Auto-Aufgabe oder Kontoaktion läuft, bleiben konkurrierende Kontofunktionen deaktiviert und werden zusätzlich in der Service-Schicht abgewiesen. Ein sichtbarer Aktivitätsstatus zeigt Anmeldung, Abmeldung, Kontowechsel oder Router-Sperre an; Buttons besitzen klare Hover-, Fokus-, Tastatur- und Deaktiviert-Zustände.
 
 ## Anpassbare Regeln
 
@@ -44,6 +44,8 @@ Für eigene Einstellungen eine Kopie ausserhalb von Program Files anlegen und im
 - `max_stagnant_attempts`: Arbeitsregel zur Neubewertung der Methode; kein externer Laufzeitwächter.
 
 Ein benötigtes tiefes Profil wird nicht still auf ein Routineprofil heruntergestuft. Bildaufgaben prüfen die angebotenen Modalitäten. Nicht angebotene Denkstufen werden gekennzeichnet auf eine bestätigte niedrigere/geeignete Stufe angepasst; `max`/`ultra` sind kein automatischer Ersatz.
+
+Im Dialog stehen vier Qualitätsprofile zur Verfügung: **Automatisch**, **Schnell**, **Ausgewogen** und **Gründlich**. Eine manuelle Wahl beeinflusst die lokale Regelentscheidung, kann aber die Sicherheitsgrenze für anspruchsvolle Rekonstruktionen, hohe Fehlerfolgen oder belegte methodische Stagnation nicht unterschreiten. Der Denkaufwand kann separat von **Minimal** bis **Ultra** gewählt werden. `Maximum` und `Ultra` werden ausschliesslich nach ausdrücklicher Auswahl angefordert und nur verwendet, wenn das live gewählte Modell die Stufe tatsächlich anbietet. **Auto zurücksetzen** stellt Profil und Denkaufwand auf automatisch, die Agentenobergrenze auf 2 und den Schreibzugriff auf aus.
 
 ## Protokolle und Datenschutz
 

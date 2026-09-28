@@ -10,7 +10,24 @@ public sealed record TaskRouterRequest(
     IReadOnlyList<string> Images,
     int MaxSubagents = 2,
     bool AllowWrites = false,
-    string? PolicyFile = null);
+    string? PolicyFile = null,
+    string Profile = "auto",
+    string Effort = "auto",
+    string? AssessmentFile = null);
+
+public sealed record TaskRouterPreferences(
+    string Profile = "auto",
+    string Effort = "auto",
+    int MaxSubagents = 2)
+{
+    public static readonly string[] Profiles = ["auto", "fast", "balanced", "deep"];
+    public static readonly string[] Efforts = ["auto", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
+
+    public TaskRouterPreferences Normalize() => new(
+        Profiles.Contains(Profile, StringComparer.Ordinal) ? Profile : "auto",
+        Efforts.Contains(Effort, StringComparer.Ordinal) ? Effort : "auto",
+        Math.Clamp(MaxSubagents, 0, 2));
+}
 
 public sealed record TaskRouterResult(int ExitCode, string RunDirectory, string Report);
 
@@ -41,6 +58,10 @@ public sealed class TaskRouterLauncher
             throw new ArgumentException("Der Auftrag muss 1 bis 60000 Zeichen enthalten.");
         if (request.MaxSubagents is < 0 or > 2)
             throw new ArgumentException("Die Obergrenze für Subagenten muss 0, 1 oder 2 sein.");
+        if (!TaskRouterPreferences.Profiles.Contains(request.Profile, StringComparer.Ordinal))
+            throw new ArgumentException("Das Qualitätsprofil muss auto, fast, balanced oder deep sein.");
+        if (!TaskRouterPreferences.Efforts.Contains(request.Effort, StringComparer.Ordinal))
+            throw new ArgumentException("Die Denkstufe ist unbekannt.");
         if (request.Images is null || request.Images.Count > 6)
             throw new ArgumentException("Höchstens sechs Referenzbilder auswählen.");
         foreach (string image in request.Images)
@@ -52,6 +73,9 @@ public sealed class TaskRouterLauncher
         if (!string.IsNullOrEmpty(request.PolicyFile) &&
             (!Path.IsPathFullyQualified(request.PolicyFile) || !File.Exists(request.PolicyFile)))
             throw new ArgumentException("Die gewählte Regeldatei existiert nicht.");
+        if (!string.IsNullOrEmpty(request.AssessmentFile) &&
+            (!Path.IsPathFullyQualified(request.AssessmentFile) || !File.Exists(request.AssessmentFile)))
+            throw new ArgumentException("Die wiederzuverwendende Einstufung existiert nicht.");
     }
 
     public static bool IsSupportedImage(string path) =>
@@ -66,17 +90,43 @@ public sealed class TaskRouterLauncher
         string policy = string.IsNullOrWhiteSpace(request.PolicyFile)
             ? "mitgelieferte Standardregeln"
             : request.PolicyFile!;
+        string assessment = string.IsNullOrWhiteSpace(request.AssessmentFile)
+            ? "neu erstellen"
+            : "vorhandene Einschätzung wiederverwenden; Live-Katalog und Regeln neu prüfen";
         return string.Join("\r\n", new[]
         {
             "Angeforderte Startparameter",
             $"Modus: {(execute ? "Einstufen und neue Codex-Sitzung starten" : "Nur einstufen")}",
             $"Projekt: {request.ProjectDirectory}",
             $"Lokale Schreibfreigabe: {writes}",
+            $"Qualitätsprofil: {FormatProfile(request.Profile)}",
+            $"Denkaufwand: {FormatEffort(request.Effort)}",
             $"Nebenrollen: höchstens {request.MaxSubagents}",
             $"Referenzbilder: {request.Images.Count}",
-            $"Regeln: {policy}"
+            $"Regeln: {policy}",
+            $"Einstufung: {assessment}"
         });
     }
+
+    private static string FormatProfile(string profile) => profile switch
+    {
+        "fast" => "Schnell",
+        "balanced" => "Ausgewogen",
+        "deep" => "Gründlich",
+        _ => "Automatisch"
+    };
+
+    private static string FormatEffort(string effort) => effort switch
+    {
+        "minimal" => "Minimal",
+        "low" => "Niedrig",
+        "medium" => "Mittel",
+        "high" => "Hoch",
+        "xhigh" => "Sehr hoch",
+        "max" => "Maximum (ausdrücklich gewählt)",
+        "ultra" => "Ultra (ausdrücklich gewählt)",
+        _ => "Automatisch"
+    };
 
     public static ProcessStartInfo BuildStartInfo(
         string python, bool usePythonLauncher, string routerScript, string codexPath,
@@ -96,6 +146,7 @@ public sealed class TaskRouterLauncher
         foreach (string argument in new[] { "-X", "utf8", routerScript, Path.Combine(Path.GetDirectoryName(taskFile)!, "error.log"), execute ? "run" : "plan",
                      "--project", request.ProjectDirectory, "--task-file", taskFile,
                      "--codex", codexPath, "--max-subagents", request.MaxSubagents.ToString(),
+                     "--profile", request.Profile, "--effort", request.Effort,
                      "--out", outputDirectory })
             info.ArgumentList.Add(argument);
         if (execute && request.AllowWrites) info.ArgumentList.Add("--write");
@@ -103,6 +154,11 @@ public sealed class TaskRouterLauncher
         {
             info.ArgumentList.Add("--policy");
             info.ArgumentList.Add(request.PolicyFile);
+        }
+        if (!string.IsNullOrEmpty(request.AssessmentFile))
+        {
+            info.ArgumentList.Add("--assessment-file");
+            info.ArgumentList.Add(request.AssessmentFile);
         }
         foreach (string image in request.Images)
         {
@@ -183,6 +239,8 @@ public sealed class TaskRouterLauncher
         var text = new StringBuilder();
         text.AppendLine($"Modell: {root.GetProperty("model").GetString()}");
         text.AppendLine($"Denkaufwand: {root.GetProperty("effort").GetString()}");
+        if (root.TryGetProperty("requested_tier", out JsonElement tier))
+            text.AppendLine($"Qualitätsprofil: {FormatProfile(tier.GetString() ?? "auto")}");
         text.AppendLine($"Arbeitsumfang: {root.GetProperty("workload").GetString()} (keine Zeitprognose)");
         text.AppendLine($"Subagenten: höchstens {root.GetProperty("max_concurrent_subagents").GetInt32()}");
         if (root.TryGetProperty("reasons", out JsonElement reasons))

@@ -41,6 +41,17 @@ public sealed class TaskRouterLauncherTests : IDisposable
     [Fact]
     public void MissingPolicyIsRejected() => Assert.Throws<ArgumentException>(() => TaskRouterLauncher.Validate(Request() with { PolicyFile = Path.Combine(_root, "missing.json") }));
 
+    [Theory]
+    [InlineData("turbo", "auto")]
+    [InlineData("auto", "huge")]
+    public void UnknownRoutingPreferencesAreRejected(string profile, string effort) =>
+        Assert.Throws<ArgumentException>(() => TaskRouterLauncher.Validate(
+            Request() with { Profile = profile, Effort = effort }));
+
+    [Fact]
+    public void MissingCachedAssessmentIsRejected() => Assert.Throws<ArgumentException>(() =>
+        TaskRouterLauncher.Validate(Request() with { AssessmentFile = Path.Combine(_root, "missing-assessment.json") }));
+
     [Fact]
     public void PromptDoesNotEnterArgumentsAndNoShellIsUsed()
     {
@@ -103,6 +114,24 @@ public sealed class TaskRouterLauncherTests : IDisposable
     }
 
     [Fact]
+    public void RoutingPreferencesAndCachedAssessmentAreForwarded()
+    {
+        string assessment = Path.Combine(_root, "assessment.json");
+        File.WriteAllText(assessment, "{}");
+
+        ProcessStartInfo info = Info(Request() with
+        {
+            Profile = "deep",
+            Effort = "xhigh",
+            AssessmentFile = assessment
+        }, true);
+
+        Assert.Equal("deep", info.ArgumentList[info.ArgumentList.IndexOf("--profile") + 1]);
+        Assert.Equal("xhigh", info.ArgumentList[info.ArgumentList.IndexOf("--effort") + 1]);
+        Assert.Equal(assessment, info.ArgumentList[info.ArgumentList.IndexOf("--assessment-file") + 1]);
+    }
+
+    [Fact]
     public void BlockedPlanDoesNotClaimASelectedModel()
     {
         string report = TaskRouterLauncher.FormatPlan("""{"status":"blocked","blocking_reason":"Reference missing"}""");
@@ -125,8 +154,28 @@ public sealed class TaskRouterLauncherTests : IDisposable
 
         Assert.Contains("neue Codex-Sitzung", summary);
         Assert.Contains("Schreibfreigabe: EIN", summary);
+        Assert.Contains("Qualitätsprofil: Automatisch", summary);
+        Assert.Contains("Denkaufwand: Automatisch", summary);
         Assert.Contains("höchstens 1", summary);
         Assert.Contains("mitgelieferte Standardregeln", summary);
         Assert.DoesNotContain("ausgeführt", summary.ToLowerInvariant());
+    }
+
+    [Fact]
+    public void RequestedManualPreferencesAndReusedAssessmentAreVisible()
+    {
+        string assessment = Path.Combine(_root, "assessment.json");
+        File.WriteAllText(assessment, "{}");
+
+        string summary = TaskRouterLauncher.FormatRequest(Request() with
+        {
+            Profile = "deep",
+            Effort = "max",
+            AssessmentFile = assessment
+        }, execute: true);
+
+        Assert.Contains("Qualitätsprofil: Gründlich", summary);
+        Assert.Contains("Maximum (ausdrücklich gewählt)", summary);
+        Assert.Contains("vorhandene Einschätzung wiederverwenden", summary);
     }
 }

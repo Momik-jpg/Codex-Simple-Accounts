@@ -132,7 +132,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
             bool routerActive = _taskRouterActivity.IsActive;
             var autoTask = new ToolStripMenuItem(routerActive
                 ? "Auto-Aufgabe läuft · anzeigen"
-                : "Auto-Aufgabe öffnen …")
+                : "Neue Auto-Aufgabe …")
             {
                 Enabled = true,
                 ForeColor = routerActive ? Color.FromArgb(108, 201, 145) : Color.FromArgb(112, 170, 240),

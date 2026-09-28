@@ -27,6 +27,8 @@ import uuid
 ROOT = Path(__file__).resolve().parent
 TIERS = ("fast", "balanced", "deep")
 EFFORTS = ("minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+PROFILES = ("auto",) + TIERS
+EFFORT_PREFERENCES = ("auto",) + EFFORTS
 MAX_INPUT = 60000
 
 
@@ -161,7 +163,12 @@ def choose_effort(model: dict[str, Any], desired: str) -> tuple[str | None, str 
 
 
 def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
-           cap: int = 2, attached_images: bool = False) -> dict[str, Any]:
+           cap: int = 2, attached_images: bool = False, profile: str = "auto",
+           effort_preference: str = "auto") -> dict[str, Any]:
+    if profile not in PROFILES:
+        raise RouterError(f"Unbekanntes Qualitätsprofil: {profile}")
+    if effort_preference not in EFFORT_PREFERENCES:
+        raise RouterError(f"Unbekannte Denkstufen-Vorgabe: {effort_preference}")
     validate(a, load_json(ROOT / "assessment.schema.json"))
     s = a["scores"]
     score = sum(s[k] * w for k, w in p["weights"].items())
@@ -173,12 +180,23 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
                     (s["reasoning"] == 3 and s["ambiguity"] >= 2) or
                     (s["failure_impact"] == 3 and s["verification_difficulty"] >= 2) or
                     (a["stagnant_attempts"] >= 2 and a["stall_cause"] in ("reasoning", "method")))
+    safety_floor = "fast"
     if strong_floor:
         tier = "deep"
+        safety_floor = "deep"
         reasons.append("Qualitätsregel: anspruchsvolle Rekonstruktion/Analyse oder belegte methodische Stagnation.")
     elif (a["confidence"] == "low" or s["failure_impact"] >= 2) and tier == "fast":
         tier = "balanced"
+        safety_floor = "balanced"
         reasons.append("Unsichere Einstufung oder Fehlerfolgen: kein Routineprofil.")
+    if profile != "auto":
+        selected = TIERS.index(profile)
+        minimum = TIERS.index(safety_floor)
+        tier = TIERS[max(selected, minimum)]
+        if tier == profile:
+            reasons.append(f"Manuell gewähltes Qualitätsprofil: {profile}.")
+        else:
+            reasons.append(f"Profilwunsch {profile} liegt unter der Sicherheitsgrenze; {tier} bleibt aktiv.")
     if a["stall_cause"] in ("input", "tool", "permission", "compute"):
         reasons.append("Ressourcen-/Werkzeugproblem ist für sich kein Grund für mehr Denkaufwand.")
     if a["blocking_reason"].strip():
@@ -190,10 +208,13 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
     model, actual_tier = choose_model(catalog, p, tier, needs_images)
     if actual_tier != tier:
         reasons.append(f"Profil {tier} nicht verfügbar: {actual_tier} verwendet, nicht still heruntergestuft.")
-    desired = ("low" if tier == "fast" else
-               "high" if tier == "balanced" and (s["reasoning"] >= 2 or score >= 11) else
-               "medium" if tier == "balanced" else
-               "xhigh" if a["inverse_visual_reconstruction"] or score >= 19 else "high")
+    automatic_effort = ("low" if tier == "fast" else
+                        "high" if tier == "balanced" and (s["reasoning"] >= 2 or score >= 11) else
+                        "medium" if tier == "balanced" else
+                        "xhigh" if a["inverse_visual_reconstruction"] or score >= 19 else "high")
+    desired = automatic_effort if effort_preference == "auto" else effort_preference
+    if effort_preference != "auto":
+        reasons.append(f"Manuell gewünschter Denkaufwand: {effort_preference}.")
     effort, note = choose_effort(model, desired)
     if note:
         reasons.append(note)
@@ -221,6 +242,7 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
     return {"status": "ready", "goal": a["goal"], "score": score,
             "workload": a["workload"], "confidence": a["confidence"],
             "requested_tier": tier, "actual_tier": actual_tier,
+            "profile_preference": profile, "effort_preference": effort_preference,
             "model": model["model"], "effort": effort, "agents": agents,
             "max_concurrent_subagents": len(agents), "reasons": reasons,
             "acceptance_checks": a["acceptance_checks"], "evidence": a["evidence"],
@@ -517,13 +539,18 @@ def cli() -> int:
         sp.add_argument("--image", type=Path, action="append", default=[])
         sp.add_argument("--policy", type=Path, default=ROOT / "routing_policy.json")
         sp.add_argument("--max-subagents", type=int, choices=(0, 1, 2), default=2)
+        sp.add_argument("--profile", choices=PROFILES, default="auto",
+                        help="Auto-Auswahl oder gewünschtes Qualitätsprofil")
+        sp.add_argument("--effort", choices=EFFORT_PREFERENCES, default="auto",
+                        help="Auto-Auswahl oder ausdrücklich gewünschter Denkaufwand")
         sp.add_argument("--codex", help="Pfad zum Codex-Programm oder codex.js")
         sp.add_argument("--timeout", type=int, default=150, help="Sekunden für die Eingangsprüfung")
         sp.add_argument("--out", type=Path, help="Neuer Ordner für den Lauf; vorhandene Ordner werden nicht überschrieben")
+        sp.add_argument("--assessment-file", type=Path,
+                        help="Vorhandene Einstufung wiederverwenden; Live-Katalog und Regeln werden neu geprüft")
         if name == "run":
             sp.add_argument("--write", action="store_true", help="Lokale Änderungen für Umsetzungsaufträge erlauben")
         else:
-            sp.add_argument("--assessment-file", type=Path, help="Vorhandene Einstufung statt eines Modellaufrufs")
             sp.add_argument("--models-file", type=Path, help="Katalogdatei nur für Offline-Prüfungen, niemals Live-Verfügbarkeit")
     models = sub.add_parser("models", help="Live-Katalog abfragen, keine Modellinferenz")
     models.add_argument("--codex")
@@ -589,7 +616,8 @@ def cli() -> int:
     else:
         print("Kurze Eingangsprüfung läuft; der Projektauftrag wurde noch nicht gestartet.", flush=True)
         assessment = assess(prefix, catalog, p, task, images, root, args.timeout)
-    plan = decide(assessment, catalog, p, args.max_subagents, bool(images))
+    plan = decide(assessment, catalog, p, args.max_subagents, bool(images),
+                  args.profile, args.effort)
     write_json(root / "assessment.json", assessment)
     plan["catalog_source"] = "offline_unverified" if offline else "live_model_list"
     write_json(root / "plan.json", plan)

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -88,6 +89,31 @@ class PolicyTests(unittest.TestCase):
 
     def test_user_can_disable_agents(self):
         self.assertEqual(self.plan(self.research, cap=0)['max_concurrent_subagents'], 0)
+
+    def test_manual_deep_profile_upgrades_simple_task(self):
+        plan = self.plan(profile='deep')
+        self.assertEqual(plan['model'], 'gpt-6-astra')
+        self.assertEqual(plan['profile_preference'], 'deep')
+        self.assertTrue(any('Manuell gewähltes Qualitätsprofil' in x for x in plan['reasons']))
+
+    def test_manual_fast_profile_cannot_bypass_strong_safety_floor(self):
+        plan = self.plan(self.umr, profile='fast')
+        self.assertEqual(plan['model'], 'gpt-6-astra')
+        self.assertEqual(plan['requested_tier'], 'deep')
+        self.assertTrue(any('Sicherheitsgrenze' in x for x in plan['reasons']))
+
+    def test_manual_effort_is_checked_against_selected_live_model(self):
+        plan = self.plan(effort_preference='high')
+        self.assertEqual(plan['effort'], 'high')
+        self.assertEqual(plan['effort_preference'], 'high')
+
+    def test_max_effort_is_only_used_when_explicit_and_supported(self):
+        cat = copy.deepcopy(self.catalog)
+        cat[0]['efforts'].append('max')
+        automatic = r.decide(self.simple, cat, self.p)
+        explicit = r.decide(self.simple, cat, self.p, effort_preference='max')
+        self.assertEqual(automatic['effort'], 'low')
+        self.assertEqual(explicit['effort'], 'max')
 
     def test_agent_cap_one(self):
         self.assertEqual(self.plan(self.research, cap=1)['max_concurrent_subagents'], 1)
@@ -326,6 +352,27 @@ for line in sys.stdin:
         with tempfile.TemporaryDirectory() as td:
             with self.assertRaises(r.RouterError):
                 r.captured([sys.executable,'-c','import time; time.sleep(10)'],cwd=Path(td),timeout=1)
+
+    def test_run_reuses_assessment_without_second_classifier_call(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            project = root / 'project'; project.mkdir()
+            output = root / 'run'
+            assessment = root / 'assessment.json'
+            assessment.write_text((ROOT / 'examples/message.json').read_text(), encoding='utf-8')
+            argv = [str(ROOT / 'router.py'), 'run', '--task', 'Nur prüfen',
+                    '--project', str(project), '--assessment-file', str(assessment),
+                    '--profile', 'balanced', '--effort', 'high', '--out', str(output)]
+            with mock.patch.object(sys, 'argv', argv), \
+                 mock.patch.object(r, 'resolve_codex', return_value=['codex']), \
+                 mock.patch.object(r, 'discover_models', return_value=r.load_json(ROOT / 'examples/models.fixture.json')), \
+                 mock.patch.object(r, 'assess') as classifier, \
+                 mock.patch.object(subprocess, 'call', return_value=0):
+                code = r.cli()
+            self.assertEqual(code, 0)
+            classifier.assert_not_called()
+            plan = r.load_json(output / 'plan.json')
+            self.assertEqual((plan['requested_tier'], plan['effort']), ('balanced', 'high'))
 
 
 if __name__=='__main__':
