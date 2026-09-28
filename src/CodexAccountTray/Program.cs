@@ -44,6 +44,8 @@ static class Program
                 processManager,
                 TimeSpan.FromSeconds(30),
                 () => settingsStore.Load().AutoSwitchEnabled && !taskRouterActivity.IsActive);
+            Action<Form> openTaskRouter = TaskRouterIntegration.CreateOpenHandler(
+                command, processManager, settingsStore, taskRouterActivity);
             using var context = new TrayApplicationContext(
                 accountStore,
                 loginService,
@@ -52,9 +54,9 @@ static class Program
                 settingsStore,
                 isChatGptRunning: () => desktopRuntime.IsRunning,
                 showOnStart: LaunchMode.ShouldShow(args),
-                taskRouterActivity: taskRouterActivity);
-            TaskRouterIntegration.Attach(
-                context.MainForm!, command, processManager, settingsStore, taskRouterActivity);
+                taskRouterActivity: taskRouterActivity,
+                openTaskRouter: openTaskRouter);
+            TaskRouterIntegration.Attach(context.MainForm!, openTaskRouter);
             Application.Run(context);
         }
         catch (Exception exception)
