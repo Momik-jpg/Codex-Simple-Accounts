@@ -19,6 +19,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
     private readonly HotkeyWindow _hotkey;
     private readonly AppSettingsStore _settingsStore;
     private readonly TaskRouterActivity _taskRouterActivity;
+    private readonly Action<Form>? _openTaskRouter;
     private readonly AgentLoopTaskStatusReader _taskStatusReader;
     private readonly ChatGptStartDetector _chatGptDetector;
     private readonly System.Windows.Forms.Timer _chatGptTimer;
@@ -34,7 +35,8 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         Func<bool>? isChatGptRunning = null,
         bool showOnStart = false,
         AgentLoopTaskStatusReader? taskStatusReader = null,
-        TaskRouterActivity? taskRouterActivity = null)
+        TaskRouterActivity? taskRouterActivity = null,
+        Action<Form>? openTaskRouter = null)
     {
         _accountStore = accountStore;
         _loginService = loginService;
@@ -42,6 +44,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         _monitor = monitor;
         _settingsStore = settingsStore;
         _taskRouterActivity = taskRouterActivity ?? new TaskRouterActivity();
+        _openTaskRouter = openTaskRouter;
         _taskStatusReader = taskStatusReader ?? new AgentLoopTaskStatusReader();
         _chatGptDetector = new ChatGptStartDetector(isChatGptRunning ?? IsChatGptRunning);
         _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
@@ -124,7 +127,28 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
             Font = new Font("Segoe UI Semibold", 10.5f)
         };
         _menu.Items.Add(heading);
-        if (_taskRouterActivity.IsActive)
+        if (_openTaskRouter is not null)
+        {
+            bool routerActive = _taskRouterActivity.IsActive;
+            var autoTask = new ToolStripMenuItem(routerActive
+                ? "Auto-Aufgabe läuft · Kontowechsel gesperrt"
+                : "Auto-Aufgabe öffnen …")
+            {
+                Enabled = !routerActive,
+                ForeColor = routerActive ? Color.FromArgb(108, 201, 145) : Color.FromArgb(112, 170, 240),
+                Font = new Font("Segoe UI Semibold", 9.5f),
+                ToolTipText = routerActive
+                    ? "Der aktive Lauf schützt CODEX_HOME vor Kontowechseln."
+                    : "Auftrag einstufen und in einer neuen Codex-Sitzung starten."
+            };
+            autoTask.Click += (_, _) =>
+            {
+                _managerForm.ShowWindow();
+                _openTaskRouter(_managerForm);
+            };
+            _menu.Items.Add(autoTask);
+        }
+        else if (_taskRouterActivity.IsActive)
         {
             _menu.Items.Add(new ToolStripMenuItem("Auto-Aufgabe läuft · Kontowechsel gesperrt")
             {
@@ -411,7 +435,12 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
 
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs eventArgs)
         {
-            eventArgs.TextColor = eventArgs.Item.Enabled ? MenuForeground : Color.FromArgb(145, 150, 153);
+            Color requested = eventArgs.Item.ForeColor.IsEmpty ? MenuForeground : eventArgs.Item.ForeColor;
+            eventArgs.TextColor = eventArgs.Item.Enabled
+                ? requested
+                : requested != MenuForeground
+                    ? requested
+                    : Color.FromArgb(145, 150, 153);
             base.OnRenderItemText(eventArgs);
         }
     }
