@@ -151,7 +151,7 @@ public sealed class AccountManagerForm : Form
 
         var refresh = CreateButton("Limits prüfen", new Point(30, 612), new Size(170, 44), true);
         refresh.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
-        refresh.Click += async (_, _) => await RefreshLimitsAsync();
+        refresh.Click += async (_, _) => await RefreshLimitsAsync(refresh);
         Controls.Add(refresh);
 
         var hint = new Label
@@ -403,10 +403,31 @@ public sealed class AccountManagerForm : Form
         }
     }
 
-    private async Task RefreshLimitsAsync()
+    private async Task RefreshLimitsAsync(RoundedButton? sourceButton = null)
     {
-        await _monitor.RefreshAsync(CancellationToken.None);
-        RefreshView();
+        string previousText = sourceButton?.Text ?? "Limits prüfen";
+        if (sourceButton is not null)
+        {
+            sourceButton.Enabled = false;
+            sourceButton.Text = "Prüfe …";
+        }
+        try
+        {
+            await _monitor.RefreshAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(exception.Message, "Limits prüfen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            if (sourceButton is not null)
+            {
+                sourceButton.Text = previousText;
+                sourceButton.Enabled = true;
+            }
+            RefreshView();
+        }
     }
 
     private async Task EmergencyStopAsync()
