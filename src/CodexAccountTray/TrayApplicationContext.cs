@@ -131,14 +131,14 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         {
             bool routerActive = _taskRouterActivity.IsActive;
             var autoTask = new ToolStripMenuItem(routerActive
-                ? "Auto-Aufgabe läuft · Kontowechsel gesperrt"
+                ? "Auto-Aufgabe läuft · anzeigen"
                 : "Auto-Aufgabe öffnen …")
             {
-                Enabled = !routerActive,
+                Enabled = true,
                 ForeColor = routerActive ? Color.FromArgb(108, 201, 145) : Color.FromArgb(112, 170, 240),
                 Font = new Font("Segoe UI Semibold", 9.5f),
                 ToolTipText = routerActive
-                    ? "Der aktive Lauf schützt CODEX_HOME vor Kontowechseln."
+                    ? "Aktiven Lauf anzeigen; CODEX_HOME bleibt vor Kontowechseln geschützt."
                     : "Auftrag einstufen und in einer neuen Codex-Sitzung starten."
             };
             autoTask.Click += (_, _) =>
@@ -162,7 +162,14 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         {
             _menu.Items.Add(CreateAccountItem(account));
         }
-        var addAccount = new ToolStripMenuItem("Konto hinzufügen");
+        bool accountActivity = _taskRouterActivity.IsBusy;
+        var addAccount = new ToolStripMenuItem("Konto hinzufügen")
+        {
+            Enabled = !accountActivity,
+            ToolTipText = accountActivity
+                ? "Während einer laufenden Kontoaktion oder Auto-Aufgabe gesperrt."
+                : "Ein weiteres Codex-Konto anmelden."
+        };
         addAccount.Click += async (_, _) => await LoginAsync(_accountStore.NextAccountNumber());
         _menu.Items.Add(addAccount);
 
@@ -185,19 +192,29 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         refresh.Click += async (_, _) => await RefreshLimitsAsync();
         _menu.Items.Add(refresh);
 
-        var autoSwap = new ToolStripMenuItem("Auto-Swap: 5 h 1 % · Woche 0 %")
+        string autoSwapText = _taskRouterActivity.IsActive
+            ? "Auto-Swap gesperrt · Auto-Aufgabe läuft"
+            : accountActivity
+                ? "Auto-Swap pausiert · Kontoaktion läuft"
+                : "Auto-Swap: 5 h 1 % · Woche 0 %";
+        var autoSwap = new ToolStripMenuItem(autoSwapText)
         {
             Checked = _settingsStore.Load().AutoSwitchEnabled,
             CheckOnClick = true,
-            Enabled = !_taskRouterActivity.IsActive
+            Enabled = !accountActivity,
+            ToolTipText = accountActivity
+                ? "Nach Ende der laufenden Aktion wieder verfügbar."
+                : "Automatischen Kontowechsel ein- oder ausschalten."
         };
         autoSwap.CheckedChanged += (_, _) =>
         {
             AppSettings current = _settingsStore.Load();
-            if (_taskRouterActivity.IsActive)
+            if (_taskRouterActivity.IsBusy)
             {
                 autoSwap.Checked = current.AutoSwitchEnabled;
-                ShowNotice("Auto-Swap ist während einer Auto-Aufgabe gesperrt.");
+                ShowNotice(_taskRouterActivity.IsActive
+                    ? "Auto-Swap ist während einer Auto-Aufgabe gesperrt."
+                    : "Auto-Swap ist während der laufenden Kontoaktion gesperrt.");
                 return;
             }
             if (current.AutoSwitchEnabled != autoSwap.Checked)
@@ -227,6 +244,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
 
     private ToolStripMenuItem CreateAccountItem(int account)
     {
+        bool accountActivity = _taskRouterActivity.IsBusy;
         bool loggedIn = _accountStore.IsLoggedIn(account);
         bool active = _processManager.ActiveAccount == account;
         bool pending = _processManager.PendingAccount == account;
@@ -247,20 +265,23 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         {
             var start = new ToolStripMenuItem("Codex-App öffnen")
             {
-                Enabled = !_taskRouterActivity.IsActive
+                Enabled = !accountActivity
             };
             start.Click += async (_, _) => await StartAccountAsync(account);
             item.DropDownItems.Add(start);
         }
 
-        var login = new ToolStripMenuItem(loggedIn ? "Neu anmelden" : "Anmelden");
+        var login = new ToolStripMenuItem(loggedIn ? "Neu anmelden" : "Anmelden")
+        {
+            Enabled = !accountActivity
+        };
         login.Click += async (_, _) => await LoginAsync(account);
         item.DropDownItems.Add(login);
         if (loggedIn)
         {
             var logout = new ToolStripMenuItem("Abmelden")
             {
-                Enabled = !_taskRouterActivity.IsActive
+                Enabled = !accountActivity
             };
             logout.Click += async (_, _) => await LogoutAsync(account);
             item.DropDownItems.Add(logout);
