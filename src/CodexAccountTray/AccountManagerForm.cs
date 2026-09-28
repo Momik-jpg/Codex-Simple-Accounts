@@ -24,6 +24,7 @@ public sealed class AccountManagerForm : Form
     private readonly Dictionary<int, AccountCardPanel> _accountCards = [];
     private readonly CheckBox _autoSwitch = new();
     private readonly Panel _accountList = new();
+    private RoundedButton _addAccountButton = null!;
 
     public AccountManagerForm(
         AccountStore accountStore,
@@ -77,6 +78,7 @@ public sealed class AccountManagerForm : Form
     public void RefreshView()
     {
         bool routerActive = _taskRouterActivity.IsActive;
+        bool accountActivity = _taskRouterActivity.IsBusy;
         int[] accounts = _accountStore.AccountNumbers.ToArray();
         if (!_accountCards.Keys.Order().SequenceEqual(accounts))
         {
@@ -95,10 +97,11 @@ public sealed class AccountManagerForm : Form
             _accountCards[account].IsActive = active || pending;
             _nameLabels[account].Text = _accountStore.DisplayName(account);
             _loginButtons[account].Text = loggedIn ? "Neu anmelden" : "Anmelden";
-            _logoutButtons[account].Enabled = loggedIn && !_processManager.IsRunning && !routerActive;
+            _loginButtons[account].Enabled = !_processManager.IsRunning && !accountActivity;
+            _logoutButtons[account].Enabled = loggedIn && !_processManager.IsRunning && !accountActivity;
             _startButtons[account].Text = pending ? "Bereit" : active ? "Öffnen" : "Wechseln";
             _startButtons[account].Enabled = loggedIn && !_processManager.IsRunning &&
-                                             _processManager.PendingAccount is null && !routerActive;
+                                             _processManager.PendingAccount is null && !accountActivity;
 
             _monitor.Current.TryGetValue(account, out AccountLimits? limits);
             string stale = limits?.IsStale == true ? "  · veraltet" : string.Empty;
@@ -107,8 +110,14 @@ public sealed class AccountManagerForm : Form
                 LimitTextFormatter.Format(limits?.Secondary, "Woche", TimeZoneInfo.Local) + stale;
         }
 
+        _addAccountButton.Enabled = !_processManager.IsRunning && !accountActivity;
         _autoSwitch.Checked = _settingsStore.Load().AutoSwitchEnabled;
-        _autoSwitch.Enabled = !routerActive;
+        _autoSwitch.Enabled = !accountActivity;
+        _autoSwitch.Text = routerActive
+            ? "Auto-Swap gesperrt · Auto-Aufgabe läuft"
+            : accountActivity
+                ? "Auto-Swap pausiert · Kontoaktion läuft"
+                : "Auto-Swap: 5 h 1 % · Woche 0 %";
     }
 
     private void BuildLayout()
@@ -131,14 +140,14 @@ public sealed class AccountManagerForm : Form
         };
         Controls.Add(subtitle);
 
-        var addAccount = CreateButton("Konto hinzufügen", new Point(850, 50), new Size(160, 42), true);
-        addAccount.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        addAccount.Click += async (_, _) =>
+        _addAccountButton = CreateButton("Konto hinzufügen", new Point(850, 50), new Size(160, 42), true);
+        _addAccountButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _addAccountButton.Click += async (_, _) =>
         {
             int account = _accountStore.NextAccountNumber();
-            await LoginAsync(account, addAccount);
+            await LoginAsync(account, _addAccountButton);
         };
-        Controls.Add(addAccount);
+        Controls.Add(_addAccountButton);
 
         _accountList.Location = new Point(28, 106);
         _accountList.Size = new Size(984, 500);
@@ -173,7 +182,7 @@ public sealed class AccountManagerForm : Form
         _autoSwitch.CheckedChanged += (_, _) =>
         {
             AppSettings current = _settingsStore.Load();
-            if (_taskRouterActivity.IsActive)
+            if (_taskRouterActivity.IsBusy)
             {
                 _autoSwitch.Checked = current.AutoSwitchEnabled;
                 return;
