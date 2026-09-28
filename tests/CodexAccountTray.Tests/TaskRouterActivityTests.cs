@@ -14,6 +14,8 @@ public sealed class TaskRouterActivityTests
         IDisposable lease = activity.BeginRouterRun();
 
         Assert.True(activity.IsActive);
+        Assert.True(activity.IsBusy);
+        Assert.False(activity.IsAccountChangeActive);
         lease.Dispose();
         lease.Dispose();
         Assert.False(activity.IsActive);
@@ -38,6 +40,8 @@ public sealed class TaskRouterActivityTests
         var activity = new TaskRouterActivity();
         using (activity.BeginAccountChange())
         {
+            Assert.True(activity.IsBusy);
+            Assert.True(activity.IsAccountChangeActive);
             Assert.Throws<InvalidOperationException>(() => activity.BeginRouterRun());
         }
 
