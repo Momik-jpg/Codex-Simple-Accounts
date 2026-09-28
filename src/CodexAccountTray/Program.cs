@@ -36,14 +36,15 @@ static class Program
                 paths,
                 accountStore,
                 command,
-                showConsole: false);
+                showConsole: false,
+                taskRouterActivity: taskRouterActivity);
             using var monitor = new LimitMonitor(
                 paths,
                 accountStore,
                 protocolClient,
                 processManager,
                 TimeSpan.FromSeconds(30),
-                () => settingsStore.Load().AutoSwitchEnabled && !taskRouterActivity.IsActive);
+                () => settingsStore.Load().AutoSwitchEnabled && !taskRouterActivity.IsBusy);
             Action<Form> openTaskRouter = TaskRouterIntegration.CreateOpenHandler(
                 command, processManager, settingsStore, taskRouterActivity);
             using var context = new TrayApplicationContext(
