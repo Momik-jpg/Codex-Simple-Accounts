@@ -17,6 +17,7 @@ public sealed record TaskRouterResult(int ExitCode, string RunDirectory, string 
 /// <summary>Launches the bundled router without a shell or changes to account credentials.</summary>
 public sealed class TaskRouterLauncher
 {
+    private static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg", ".webp"];
     private readonly CodexCommand _codex;
     private readonly string _routerDirectory;
     private readonly string _runsDirectory;
@@ -42,16 +43,39 @@ public sealed class TaskRouterLauncher
             throw new ArgumentException("Die Obergrenze für Subagenten muss 0, 1 oder 2 sein.");
         if (request.Images is null || request.Images.Count > 6)
             throw new ArgumentException("Höchstens sechs Referenzbilder auswählen.");
-        string[] extensions = [".png", ".jpg", ".jpeg", ".webp"];
         foreach (string image in request.Images)
         {
             if (!File.Exists(image) || !Path.IsPathFullyQualified(image) ||
-                !extensions.Contains(Path.GetExtension(image), StringComparer.OrdinalIgnoreCase))
+                !IsSupportedImage(image))
                 throw new ArgumentException($"Referenzbild fehlt oder hat ein ungeeignetes Format: {image}");
         }
         if (!string.IsNullOrEmpty(request.PolicyFile) &&
             (!Path.IsPathFullyQualified(request.PolicyFile) || !File.Exists(request.PolicyFile)))
             throw new ArgumentException("Die gewählte Regeldatei existiert nicht.");
+    }
+
+    public static bool IsSupportedImage(string path) =>
+        ImageExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    public static string FormatRequest(TaskRouterRequest request, bool execute)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        string writes = execute && request.AllowWrites
+            ? "EIN (nur lokale Änderungen; der Router darf read-only wählen)"
+            : "AUS";
+        string policy = string.IsNullOrWhiteSpace(request.PolicyFile)
+            ? "mitgelieferte Standardregeln"
+            : request.PolicyFile!;
+        return string.Join("\r\n", new[]
+        {
+            "Angeforderte Startparameter",
+            $"Modus: {(execute ? "Einstufen und neue Codex-Sitzung starten" : "Nur einstufen")}",
+            $"Projekt: {request.ProjectDirectory}",
+            $"Lokale Schreibfreigabe: {writes}",
+            $"Nebenrollen: höchstens {request.MaxSubagents}",
+            $"Referenzbilder: {request.Images.Count}",
+            $"Regeln: {policy}"
+        });
     }
 
     public static ProcessStartInfo BuildStartInfo(
