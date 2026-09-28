@@ -16,6 +16,8 @@ public static class TaskRouterFormState
     public static TaskRouterControlState Calculate(
         bool projectReady,
         bool taskReady,
+        bool policyReady,
+        bool imagesReady,
         bool busy,
         bool cancellationRequested)
     {
@@ -30,13 +32,29 @@ public static class TaskRouterFormState
                 cancellationRequested ? "Abbruch angefordert …" : "Auto-Aufgabe läuft …");
         }
 
-        string status = !projectReady
-            ? "Bitte einen vorhandenen Projektordner auswählen."
-            : !taskReady
-                ? "Bitte den Auftrag beschreiben."
-                : "Bereit: erst einstufen oder direkt automatisch starten.";
+        string status;
+        if (!projectReady)
+        {
+            status = "Bitte einen vorhandenen Projektordner auswählen.";
+        }
+        else if (!taskReady)
+        {
+            status = "Bitte den Auftrag beschreiben.";
+        }
+        else if (!policyReady)
+        {
+            status = "Die optionale Regeldatei fehlt oder ist kein absoluter Pfad.";
+        }
+        else if (!imagesReady)
+        {
+            status = "Mindestens ein Referenzbild fehlt oder hat ein ungeeignetes Format.";
+        }
+        else
+        {
+            status = "Bereit: erst einstufen oder direkt automatisch starten.";
+        }
         return new TaskRouterControlState(
-            projectReady && taskReady,
+            projectReady && taskReady && policyReady && imagesReady,
             true,
             false,
             true,
@@ -292,6 +310,7 @@ public sealed class TaskRouterForm : Form
             UpdateUi();
         };
         _project.TextChanged += (_, _) => UpdateUi();
+        _policy.TextChanged += (_, _) => UpdateUi();
         _task.TextChanged += (_, _) => UpdateUi();
         _write.CheckedChanged += (_, _) => UpdateWriteHint();
         _plan.Click += async (_, _) => await LaunchAsync(false);
@@ -443,14 +462,16 @@ public sealed class TaskRouterForm : Form
         _elapsedTimer.Start();
         UpdateUi();
         _report.Text = execute
-            ? "Die Aufgabe wird neu eingestuft und in einer separaten Codex-Konsole gestartet. Freigaben dort beantworten."
-            : "Modellkatalog und kurze Einstufung werden abgefragt. Der Projektauftrag wird nicht ausgeführt.";
+            ? TaskRouterLauncher.FormatRequest(request, execute) +
+              "\r\n\r\nDie Aufgabe wird neu eingestuft und in einer separaten Codex-Konsole gestartet. Freigaben dort beantworten."
+            : TaskRouterLauncher.FormatRequest(request, execute) +
+              "\r\n\r\nModellkatalog und kurze Einstufung werden abgefragt. Der Projektauftrag wird nicht ausgeführt.";
         try
         {
             TaskRouterResult result = await _launcher.RunAsync(request, _codexHome(), execute, _cancellation.Token);
             _lastRun = result.RunDirectory;
             _logs.Enabled = true;
-            _report.Text = result.Report;
+            _report.Text = result.Report + "\r\n\r\n" + TaskRouterLauncher.FormatRequest(request, execute);
             if (!string.IsNullOrEmpty(settingsWarning))
             {
                 _report.AppendText("\r\n\r\nHinweis: " + settingsWarning);
@@ -505,8 +526,25 @@ public sealed class TaskRouterForm : Form
             projectReady = false;
         }
         bool taskReady = !string.IsNullOrWhiteSpace(_task.Text) && _task.TextLength <= _task.MaxLength;
+        bool policyReady = false;
+        bool imagesReady = false;
+        try
+        {
+            string policy = _policy.Text.Trim();
+            policyReady = policy.Length == 0 || Path.IsPathFullyQualified(policy) && File.Exists(policy);
+            imagesReady = _images.All(image =>
+                Path.IsPathFullyQualified(image) &&
+                File.Exists(image) &&
+                TaskRouterLauncher.IsSupportedImage(image));
+        }
+        catch (Exception) when (_policy.Text.Length > 0 || _images.Count > 0)
+        {
+            policyReady = false;
+            imagesReady = false;
+        }
         bool busy = _cancellation is not null;
-        TaskRouterControlState state = TaskRouterFormState.Calculate(projectReady, taskReady, busy, _cancelRequested);
+        TaskRouterControlState state = TaskRouterFormState.Calculate(
+            projectReady, taskReady, policyReady, imagesReady, busy, _cancelRequested);
 
         foreach (Control input in _inputs)
         {
@@ -548,7 +586,7 @@ public sealed class TaskRouterForm : Form
     private void UpdateWriteHint()
     {
         _writeHint.Text = _write.Checked
-            ? "Schreibzugriff EIN · nur beauftragte lokale Änderungen; keine Veröffentlichung, Löschung oder Zusammenführung."
+            ? "Schreibzugriff EIN · nur beauftragte lokale Änderungen; der Router darf trotzdem read-only wählen. Keine Veröffentlichung, Löschung oder Zusammenführung."
             : "Schreibzugriff AUS · Einstufung und gestartete Aufgabe arbeiten ohne lokale Änderungsfreigabe.";
         _writeHint.ForeColor = _write.Checked ? Warning : Muted;
     }
