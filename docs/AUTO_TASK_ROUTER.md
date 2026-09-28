@@ -25,11 +25,11 @@ Gewünschtes Konto zuerst im Kontowechsler aktivieren und **Auto-Swap vor dem Ro
 
 Die Integration schreibt selbst weder `auth.json` noch Kontoeinstellungen; sie setzt `CODEX_HOME` für ihren Kindprozess auf das aktive Codex-Home des Kontowechslers. Eigene Provider-/API-Key-Konfigurationen der CLI bleiben zu beachten.
 
-Im Dialog Projektordner, Auftrag und optional Referenzbilder auswählen. Der zuletzt erfolgreich validierte Projektordner wird für den nächsten Aufruf wieder eingesetzt. Die Agentenobergrenze darf 0, 1 oder 2 sein; sie erzwingt keine Delegation. Schreibzugriff ist standardmässig aus. Ein Umsetzungsauftrag startet ohne explizite Schreibfreigabe nicht.
+Die Auto-Aufgabe lässt sich im Kontenfenster und direkt im Tray-Menü öffnen. Im Dialog Projektordner, Auftrag und optional Referenzbilder auswählen. Der zuletzt erfolgreich validierte Projektordner wird für den nächsten Aufruf wieder eingesetzt. Die Agentenobergrenze darf 0, 1 oder 2 sein; sie erzwingt keine Delegation. Schreibzugriff ist standardmässig aus und wird bei Aktivierung deutlich hervorgehoben. Ein Umsetzungsauftrag startet ohne explizite Schreibfreigabe nicht.
 
 **Nur einstufen** zeigt die Entscheidung, ohne den Projektauftrag auszuführen. **Automatisch starten** liest einen frischen Katalog, stuft neu ein und öffnet eine interaktive Codex-Konsole. Eine zuvor angesehene Vorschau wird bewusst nicht als aktuelle Freigabe wiederverwendet. Daher verursachen Vorschau plus Start zwei Einstufungsaufrufe. Rückfragen zu Aktionen werden in der Codex-Konsole beantwortet.
 
-**Abbrechen** beendet den von diesem Dialog gestarteten Prozessbaum, nicht beliebige ChatGPT-/Codex-Prozesse. Bereits ausgeführte Änderungen werden nicht rückgängig gemacht. Das vorhandene **Notfall AUS** bleibt der Schalter für den Kontowechsel; für Router-Aufgaben den Abbrechen-Button beziehungsweise das Router-Terminal verwenden.
+Projekt und Auftrag werden schon während der Eingabe geprüft. Während Einstufung oder Ausführung sind die Eingaben gesperrt, eine Laufanzeige nennt Zustand und Dauer, und ein mehrfacher Abbruch wird verhindert. **Abbrechen** beendet den von diesem Dialog gestarteten Prozessbaum, nicht beliebige ChatGPT-/Codex-Prozesse. **Schliessen** beendet nur den inaktiven Dialog; `Esc` bricht einen laufenden Router-Prozess ab und schliesst sonst das Fenster. `Strg+Enter` stuft nur ein, `Strg+Umschalt+Enter` startet automatisch. Bereits ausgeführte Änderungen werden nicht rückgängig gemacht. Das vorhandene **Notfall AUS** bleibt der Schalter für den Kontowechsel; für Router-Aufgaben den Abbrechen-Button beziehungsweise das Router-Terminal verwenden.
 
 ## Anpassbare Regeln
 
