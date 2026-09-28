@@ -12,6 +12,8 @@ public sealed class TaskRouterActivity
     private int _state;
 
     public bool IsActive => Volatile.Read(ref _state) == RouterRun;
+    public bool IsAccountChangeActive => Volatile.Read(ref _state) == AccountChange;
+    public bool IsBusy => Volatile.Read(ref _state) != Idle;
 
     public event EventHandler? Changed;
 
