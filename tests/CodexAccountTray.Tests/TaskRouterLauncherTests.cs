@@ -116,4 +116,17 @@ public sealed class TaskRouterLauncherTests : IDisposable
         Assert.Contains("fixture-model", report); Assert.Contains("höchstens 1", report);
         Assert.Contains("keine Zeitprognose", report);
     }
+
+    [Fact]
+    public void RequestedStartParametersAreVisibleWithoutClaimingActualExecution()
+    {
+        string summary = TaskRouterLauncher.FormatRequest(
+            Request() with { AllowWrites = true, MaxSubagents = 1 }, execute: true);
+
+        Assert.Contains("neue Codex-Sitzung", summary);
+        Assert.Contains("Schreibfreigabe: EIN", summary);
+        Assert.Contains("höchstens 1", summary);
+        Assert.Contains("mitgelieferte Standardregeln", summary);
+        Assert.DoesNotContain("ausgeführt", summary.ToLowerInvariant());
+    }
 }
