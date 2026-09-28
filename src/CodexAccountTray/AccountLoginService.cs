@@ -9,23 +9,27 @@ public sealed class AccountLoginService
     private readonly CodexCommand _command;
     private readonly IReadOnlyDictionary<string, string?> _extraEnvironment;
     private readonly bool _showConsole;
+    private readonly TaskRouterActivity? _taskRouterActivity;
 
     public AccountLoginService(
         AppPaths paths,
         AccountStore store,
         CodexCommand command,
         IReadOnlyDictionary<string, string?>? extraEnvironment = null,
-        bool showConsole = false)
+        bool showConsole = false,
+        TaskRouterActivity? taskRouterActivity = null)
     {
         _paths = paths;
         _store = store;
         _command = command;
         _extraEnvironment = extraEnvironment ?? new Dictionary<string, string?>();
         _showConsole = showConsole;
+        _taskRouterActivity = taskRouterActivity;
     }
 
     public async Task LoginAsync(int accountNumber, CancellationToken cancellationToken)
     {
+        using IDisposable? accountChange = _taskRouterActivity?.BeginAccountChange();
         string loginHome = _paths.LoginHome(accountNumber);
         Directory.CreateDirectory(loginHome);
         string authFile = Path.Combine(loginHome, "auth.json");

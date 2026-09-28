@@ -6,7 +6,7 @@ namespace CodexAccountTray.Tests;
 public sealed class RoundedButtonTests
 {
     [Fact]
-    public void Hover_DoesNotChangeButtonFillColor()
+    public void Hover_GivesAVisibleFillFeedback()
     {
         using var button = new RoundedButton
         {
@@ -23,6 +23,6 @@ public sealed class RoundedButtonTests
             .Invoke(button, [EventArgs.Empty]);
         button.DrawToBitmap(after, button.ClientRectangle);
 
-        Assert.Equal(before.GetPixel(60, 20), after.GetPixel(60, 20));
+        Assert.NotEqual(before.GetPixel(60, 20), after.GetPixel(60, 20));
     }
 }

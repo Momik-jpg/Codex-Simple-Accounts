@@ -198,7 +198,19 @@ public sealed class LimitMonitor : IDisposable
             return;
         }
 
-        await _processManager.StartAsync(next.Value, resumeLast: true, cancellationToken);
+        try
+        {
+            await _processManager.StartAsync(next.Value, resumeLast: true, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Notice?.Invoke(this,
+                $"Automatischer Wechsel zu {_store.DisplayName(next.Value)} wurde nicht ausgeführt: {exception.Message}");
+        }
     }
 
     private async void OnProcessExited(object? sender, EventArgs eventArgs)

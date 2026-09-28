@@ -1,0 +1,97 @@
+{
+  "simulation": true,
+  "data": [
+    {
+      "model": "gpt-6-luna",
+      "id": "gpt-6-luna",
+      "displayName": "gpt-6-luna",
+      "hidden": false,
+      "defaultReasoningEffort": "medium",
+      "supportedReasoningEfforts": [
+        {
+          "reasoningEffort": "low",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "medium",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "high",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "xhigh",
+          "description": "TESTDATEN"
+        }
+      ],
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "isDefault": false
+    },
+    {
+      "model": "gpt-6-sol",
+      "id": "gpt-6-sol",
+      "displayName": "gpt-6-sol",
+      "hidden": false,
+      "defaultReasoningEffort": "medium",
+      "supportedReasoningEfforts": [
+        {
+          "reasoningEffort": "low",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "medium",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "high",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "xhigh",
+          "description": "TESTDATEN"
+        }
+      ],
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "isDefault": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "id": "gpt-6-astra",
+      "displayName": "gpt-6-astra",
+      "hidden": false,
+      "defaultReasoningEffort": "medium",
+      "supportedReasoningEfforts": [
+        {
+          "reasoningEffort": "low",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "medium",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "high",
+          "description": "TESTDATEN"
+        },
+        {
+          "reasoningEffort": "xhigh",
+          "description": "TESTDATEN"
+        }
+      ],
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "isDefault": false
+    }
+  ],
+  "nextCursor": null,
+  "warning": "Synthetischer Katalog nur für lokale Tests. Nicht als Accountverfügbarkeit verwenden."
+}

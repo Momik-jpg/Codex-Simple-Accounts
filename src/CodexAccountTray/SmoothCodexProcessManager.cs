@@ -145,6 +145,7 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
 {
     private readonly AccountStore _store;
     private readonly IProxyDesktopRuntime _desktop;
+    private readonly TaskRouterActivity? _taskRouterActivity;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private CancellationTokenSource _switchCancellation = new();
 
@@ -152,10 +153,12 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
         AccountStore store,
         CodexCommand command,
         string codexHome,
-        IProxyDesktopRuntime desktop)
+        IProxyDesktopRuntime desktop,
+        TaskRouterActivity? taskRouterActivity = null)
     {
         _store = store;
         _desktop = desktop;
+        _taskRouterActivity = taskRouterActivity;
         ActiveCodexHome = codexHome;
         int? detected = _store.FindByAuthFile(Path.Combine(ActiveCodexHome, "auth.json"));
         ActiveAccount = detected;
@@ -177,38 +180,51 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
         {
             throw new InvalidOperationException($"Konto {accountNumber} ist nicht angemeldet.");
         }
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            _switchCancellation.Token);
-        CancellationToken switchToken = linkedCancellation.Token;
-        if (!await _gate.WaitAsync(0, switchToken))
-        {
-            throw new InvalidOperationException("Ein Kontowechsel läuft bereits.");
-        }
+        IDisposable? accountChange = _taskRouterActivity?.BeginAccountChange();
+        bool gateAcquired = false;
         try
         {
-            if (_desktop.IsRunning && ActiveAccount == accountNumber)
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                _switchCancellation.Token);
+            CancellationToken switchToken = linkedCancellation.Token;
+            if (!await _gate.WaitAsync(0, switchToken))
             {
-                return;
+                throw new InvalidOperationException("Ein Kontowechsel läuft bereits.");
             }
-            PendingAccount = accountNumber;
+            gateAcquired = true;
             try
             {
-                if (_desktop.IsRunning)
+                if (_desktop.IsRunning && ActiveAccount == accountNumber)
                 {
-                    await _desktop.CloseAsync(switchToken);
+                    return;
                 }
-                await ActivateAsync(accountNumber, switchToken);
+                PendingAccount = accountNumber;
+                try
+                {
+                    if (_desktop.IsRunning)
+                    {
+                        await _desktop.CloseAsync(switchToken);
+                    }
+                    await ActivateAsync(accountNumber, switchToken);
+                }
+                finally
+                {
+                    PendingAccount = null;
+                }
             }
             finally
             {
-                PendingAccount = null;
+                _gate.Release();
             }
         }
         finally
         {
-            _gate.Release();
-            ProcessExited?.Invoke(this, EventArgs.Empty);
+            accountChange?.Dispose();
+            if (gateAcquired)
+            {
+                ProcessExited?.Invoke(this, EventArgs.Empty);
+            }
         }
     }
 
@@ -243,6 +259,7 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
 
     public async Task LogoutAsync(int accountNumber, CancellationToken cancellationToken)
     {
+        using IDisposable? accountChange = _taskRouterActivity?.BeginAccountChange();
         bool removeActiveAuth = ActiveAccount == accountNumber;
         if (removeActiveAuth || PendingAccount == accountNumber)
         {
