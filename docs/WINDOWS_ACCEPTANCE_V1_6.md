@@ -1,6 +1,6 @@
 # Windows-Abnahme v1.6.0 – Zwischenstand, nicht freigegeben
 
-Stand: 29. September 2026. Diese Datei ist ein lokales Prüfprotokoll; die Checkliste in [Issue #6](https://github.com/Momik-jpg/Codex-Simple-Accounts/issues/6) bleibt offen und wurde nicht als erledigt markiert.
+Stand: 29. September 2026. Diese Datei ist ein lokales Prüfprotokoll; die Checkliste in [Issue #6](https://github.com/Momik-jpg/Codex-Simple-Accounts/issues/6) bleibt offen. Der belegte Zwischenstand wurde [im Issue kommentiert](https://github.com/Momik-jpg/Codex-Simple-Accounts/issues/6#issuecomment-5886424726), ohne manuelle Prüfungen als erledigt zu markieren.
 
 ## Beobachtete Umgebung
 
@@ -31,6 +31,6 @@ Stand: 29. September 2026. Diese Datei ist ein lokales Prüfprotokoll; die Check
 - Echte Einstufung, Start, schreibgeschützter und ausdrücklich freigegebener Schreibmodus mit separatem Testkonto und Wegwerfprojekt.
 - Login, Logout, Re-Login, Auto-Swap und Kontowechsel an einer ungefährlichen Testanmeldung; keine Beschädigung von Desktop-Chats oder Kontospeicher.
 - Clean-Install, Upgrade von v1.5.5, Deinstallation und Neuinstallation. Installation auf dem produktiven Benutzerprofil wäre ohne Testumgebung nicht verantwortbar.
-- [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7) wurde als Entwurf erstellt. Seine [CI](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/runs/36541430452) ist noch zu prüfen. GitHub-Issue #6 aktualisieren, Merge und Release-Entwurf mit finalem Installer füllen. Die lokale GitHub-CLI-Anmeldung meldet ein ungültiges Token; der PR wurde über die bereits funktionierende Git-Anmeldung erstellt.
+- [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7) wurde als Entwurf erstellt. Seine [CI für cfe31c4](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/runs/36541827103) ist grün; Review, Merge und Füllen des Release-Entwurfs mit einem final verifizierten Installer bleiben offen. Die lokale GitHub-CLI-Anmeldung meldet ein ungültiges Token; PR und Issue-Kommentar wurden über die bereits funktionierende Git-Anmeldung erstellt.
 
 Bis diese Punkte wirklich geprüft und dokumentiert sind, ist v1.6.0 **nicht veröffentlichungsbereit**. Der bestehende Release-Entwurf bleibt unveröffentlicht.
