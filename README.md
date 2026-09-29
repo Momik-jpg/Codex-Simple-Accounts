@@ -16,6 +16,7 @@ Eine lokale Windows-App für Codex-Konten, Limits und neue Aufgaben mit geprüft
 - Aufgabenrouter mit automatischer oder manueller Qualitäts-, Modell- und Denkstufenwahl aus dem Live-Modellkatalog
 - Lokale Sicherheitsuntergrenzen, sichtbare Fallbacks und erneute Katalog-/Regelprüfung unmittelbar vor dem Start
 - Wiederverwendbare Einstufung für einen schnelleren Start ohne doppelten Klassifikationsaufruf
+- Vorschau eines auftragsbezogenen KI-Arbeitsplans mit Prüfschritten und ungeprüften Abschlusskriterien; nach Projektinspektion zu bestätigen
 - Direkter Aufgabenrouter-Einstieg im Tray-Menü mit klaren Lauf-, Abbruch-, Eingabe- und Kontowechselstatus
 
 ## Sicherer Wechselablauf

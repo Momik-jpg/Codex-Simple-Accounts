@@ -19,19 +19,19 @@ Stand: 29. September 2026. Diese Datei ist ein lokales Prüfprotokoll; die Check
 ## Automatisch lokal geprüft
 
 - `model/list` lieferte für die aktive CLI-Anmeldung nur `gpt-5.5` mit `low`, `medium`, `high`, `xhigh`. Kein Modell wurde aus der Präferenzliste als verfügbar vorausgesetzt.
-- 94 .NET-Tests und 72 Python-Tests bestanden. Diese simulieren kritische Router-, Start-, Konto- und Fehlerpfade, ersetzen aber keine echte Anmeldung oder Desktop-Abnahme.
+- 95 .NET-Tests und 75 Python-Tests bestanden. Diese simulieren kritische Router-, Start-, Konto- und Fehlerpfade sowie Planvalidierung, ersetzen aber keine echte Anmeldung oder Desktop-Abnahme.
 - Release-Build und Inno-Installer wurden lokal kompiliert; Produkt-/Dateiversion `1.6.0`. Der Installer wurde **nicht** ausgeführt.
-- Lokaler Installationskandidat `Codex-Konten-Installer.exe`: `34'535'920` Bytes, SHA-256 `0F1EAAF473B200D67D87487D1105FB86B5415C7C54141D24A08F0CBE61449218`. Der Hash ist noch nicht mit einem hochgeladenen Release-Asset verglichen.
+- Lokaler Installationskandidat `Codex-Konten-Installer.exe`: `34'540'912` Bytes, SHA-256 `6DBE66ADD3AAF7F2E96ED660E57901812F693F1B6119501542073A34F489272A`. Der Hash ist noch nicht mit einem hochgeladenen Release-Asset verglichen.
 - `Get-AuthenticodeSignature` meldete `NotSigned`; eine Windows-Herausgeber-/SmartScreen-Warnung ist möglich und wird nicht automatisch umgangen.
 - Python-Syntax, Router-JSON, Projekt-XML, Versionsabgleich und Publish-Payload wurden lokal geprüft.
 - Quelltextsuche ergab keinen neuen Listener für Port `47831`; bei der Stichprobe war auf diesem Port kein lokaler TCP-Listener sichtbar. Der bestehende `CodexBackend` kann einen kurzlebigen freien Loopback-Port verwenden.
 
 ## Offen und nicht als bestanden behauptet
 
-- Öffnen aus Kontenfenster und Tray; Fokus, Tastatur, Hover, Fehler-/Ladezustände; Layout bei 100 %, 125 %, 150 % und 200 %; Screenshots.
+- Öffnen aus Kontenfenster und Tray; Fokus, Tastatur, Hover-Übergänge mit Windows-Animationen ein/aus, Fehler-/Ladezustände; Layout bei 100 %, 125 %, 150 % und 200 %; Screenshots.
 - Echte Einstufung, Start, schreibgeschützter und ausdrücklich freigegebener Schreibmodus mit separatem Testkonto und Wegwerfprojekt.
 - Login, Logout, Re-Login, Auto-Swap und Kontowechsel an einer ungefährlichen Testanmeldung; keine Beschädigung von Desktop-Chats oder Kontospeicher.
 - Clean-Install, Upgrade von v1.5.5, Deinstallation und Neuinstallation. Installation auf dem produktiven Benutzerprofil wäre ohne Testumgebung nicht verantwortbar.
-- [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7) wurde als Entwurf erstellt. Seine [CI für cfe31c4](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/runs/36541827103) ist grün; Review, Merge und Füllen des Release-Entwurfs mit einem final verifizierten Installer bleiben offen. Die lokale GitHub-CLI-Anmeldung meldet ein ungültiges Token; PR und Issue-Kommentar wurden über die bereits funktionierende Git-Anmeldung erstellt.
+- [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7) wurde als Entwurf erstellt. Ein früherer [CI-Lauf](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/runs/36542406350) ist grün; die aktuelle Änderung braucht einen neuen CI-Lauf. Review, Merge und Füllen des Release-Entwurfs mit einem final verifizierten Installer bleiben offen. Die lokale GitHub-CLI-Anmeldung meldet ein ungültiges Token; PR und Issue-Kommentar wurden über die bereits funktionierende Git-Anmeldung erstellt.
 
 Bis diese Punkte wirklich geprüft und dokumentiert sind, ist v1.6.0 **nicht veröffentlichungsbereit**. Der bestehende Release-Entwurf bleibt unveröffentlicht.

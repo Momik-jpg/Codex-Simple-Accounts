@@ -386,8 +386,16 @@ public sealed class TaskRouterLauncher
         using JsonDocument doc = JsonDocument.Parse(json);
         JsonElement root = doc.RootElement;
         if (root.GetProperty("status").GetString() == "blocked")
-            return "Blockiert: " + root.GetProperty("blocking_reason").GetString();
+        {
+            string blocked = "Blockiert: " + root.GetProperty("blocking_reason").GetString();
+            if (root.TryGetProperty("plan_steps", out JsonElement blockedSteps))
+                foreach (JsonElement step in blockedSteps.EnumerateArray())
+                    blocked += "\r\nVorgeschlagener Klärungsschritt (ungeprüft): " + step.GetProperty("action").GetString();
+            return blocked;
+        }
         var text = new StringBuilder();
+        if (root.TryGetProperty("goal", out JsonElement goal))
+            text.AppendLine($"Ziel: {goal.GetString()}");
         if (root.TryGetProperty("task_type", out JsonElement taskType))
             text.AppendLine($"Auftragsart: {taskType.GetString()}");
         if (root.TryGetProperty("score", out JsonElement score))
@@ -401,6 +409,8 @@ public sealed class TaskRouterLauncher
         if (root.TryGetProperty("requested_tier", out JsonElement tier))
             text.AppendLine($"Qualitätsprofil: {FormatProfile(tier.GetString() ?? "auto")}");
         text.AppendLine($"Arbeitsumfang: {root.GetProperty("workload").GetString()} (keine Zeitprognose)");
+        if (root.TryGetProperty("confidence", out JsonElement confidence))
+            text.AppendLine($"Einstufungssicherheit: {confidence.GetString()} (nur Eingangsprüfung)");
         text.AppendLine($"Subagenten: höchstens {root.GetProperty("max_concurrent_subagents").GetInt32()}");
         if (root.TryGetProperty("reasons", out JsonElement reasons))
             foreach (JsonElement reason in reasons.EnumerateArray()) text.AppendLine("• " + reason.GetString());
@@ -408,6 +418,21 @@ public sealed class TaskRouterLauncher
             foreach (JsonElement agent in agents.EnumerateArray())
                 text.AppendLine($"Nebenrolle: {agent.GetProperty("model").GetString()} / " +
                     $"{agent.GetProperty("effort").GetString()} — {agent.GetProperty("objective").GetString()}");
+        if (root.TryGetProperty("plan_steps", out JsonElement steps))
+        {
+            text.AppendLine();
+            text.AppendLine("KI-Arbeitsplan · Entwurf vor Projektinspektion:");
+            int number = 0;
+            foreach (JsonElement step in steps.EnumerateArray())
+                text.AppendLine($"{++number}. {step.GetProperty("action").GetString()}\r\n   Prüfen: {step.GetProperty("verification").GetString()}");
+        }
+        if (root.TryGetProperty("acceptance_checks", out JsonElement checks))
+        {
+            text.AppendLine();
+            text.AppendLine("Abschlusskriterien · noch nicht geprüft:");
+            foreach (JsonElement check in checks.EnumerateArray())
+                text.AppendLine("• " + check.GetString());
+        }
         return text.ToString();
     }
 

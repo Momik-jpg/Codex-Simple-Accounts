@@ -40,6 +40,16 @@
     "Tragende Aussagen an geöffneten Primärquellen belegen.",
     "Widersprüche erklären oder als offen kennzeichnen."
   ],
+  "plan_steps": [
+    {
+      "action": "Vergleichsfrage und relevante Primärquellen eingrenzen.",
+      "verification": "Quellen und Auswahlkriterien offenlegen."
+    },
+    {
+      "action": "Eigenschaften und Gegenbelege getrennt untersuchen.",
+      "verification": "Jede tragende Aussage mit einer Quelle belegen; Widersprüche markieren."
+    }
+  ],
   "evidence": [
     "Simulation einer breiten technischen Recherche mit zwei getrennten Fragen."
   ]

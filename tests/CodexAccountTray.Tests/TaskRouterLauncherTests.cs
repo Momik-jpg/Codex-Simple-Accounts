@@ -184,8 +184,9 @@ public sealed class TaskRouterLauncherTests : IDisposable
     [Fact]
     public void BlockedPlanDoesNotClaimASelectedModel()
     {
-        string report = TaskRouterLauncher.FormatPlan("""{"status":"blocked","blocking_reason":"Reference missing"}""");
+        string report = TaskRouterLauncher.FormatPlan("""{"status":"blocked","blocking_reason":"Reference missing","plan_steps":[{"action":"Ask for image","verification":"Image received"}]}""");
         Assert.Contains("Reference missing", report); Assert.DoesNotContain("Modell:", report);
+        Assert.Contains("Vorgeschlagener Klärungsschritt (ungeprüft): Ask for image", report);
     }
 
     [Fact]
@@ -194,6 +195,18 @@ public sealed class TaskRouterLauncherTests : IDisposable
         string report = TaskRouterLauncher.FormatPlan("""{"status":"ready","model":"fixture-model","effort":"high","workload":"L","max_concurrent_subagents":1,"reasons":["Test"],"agents":[]}""");
         Assert.Contains("fixture-model", report); Assert.Contains("höchstens 1", report);
         Assert.Contains("keine Zeitprognose", report);
+    }
+
+    [Fact]
+    public void PlanShowsProvisionalActionsAndUnverifiedChecks()
+    {
+        string report = TaskRouterLauncher.FormatPlan("""{"status":"ready","goal":"Testziel","model":"fixture-model","effort":"high","workload":"M","max_concurrent_subagents":0,"plan_steps":[{"action":"Projekt ansehen","verification":"Dateien bestätigen"}],"acceptance_checks":["Test bestehen"]}""");
+        Assert.Contains("Ziel: Testziel", report);
+        Assert.Contains("KI-Arbeitsplan · Entwurf vor Projektinspektion", report);
+        Assert.Contains("1. Projekt ansehen", report);
+        Assert.Contains("Prüfen: Dateien bestätigen", report);
+        Assert.Contains("Abschlusskriterien · noch nicht geprüft", report);
+        Assert.Contains("Test bestehen", report);
     }
 
     [Fact]

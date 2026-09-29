@@ -7,7 +7,7 @@ Der Router startet eine **neue Codex-CLI-Sitzung**. Er verändert keine laufende
 ## Wer entscheidet?
 
 1. **Codex `model/list`** liefert den sichtbaren Modellkatalog der aktuellen CLI-Anmeldung. Er entscheidet nicht, welches Modell für die Aufgabe am besten ist.
-2. **Ein kurzer Klassifikationsaufruf** bewertet ausschliesslich Auftrag und ausdrücklich beigefügte Bilder. Präferenz: ein verfügbares Sol-Modell aus `classifier_models` mit `low`. Fehlt es, werden `fast`, die übrigen `balanced`-Modelle und zuletzt `deep` geprüft. Das ist eine lokale Kostenpräferenz, keine verifizierte Preisrangliste. Der tatsächliche Klassifikator und jeder Fallback stehen in `intake.json`.
+2. **Ein kurzer Klassifikationsaufruf** bewertet ausschliesslich Auftrag und ausdrücklich beigefügte Bilder und schlägt 1–5 konkrete, überprüfbare Arbeitsschritte vor. Präferenz: ein verfügbares Sol-Modell aus `classifier_models` mit `low`. Fehlt es, werden `fast`, die übrigen `balanced`-Modelle und zuletzt `deep` geprüft. Das ist eine lokale Kostenpräferenz, keine verifizierte Preisrangliste. Der tatsächliche Klassifikator und jeder Fallback stehen in `intake.json`.
 3. **Deterministischer lokaler Code** (`decide` in `router.py`) wendet die Gewichte, Schwellen und Qualitätsregeln an. Er wählt Hauptmodell, angebotene Denkstufe und 0–2 geeignete Nebenrollen. Das Modell kann diese Regeln oder die Schreibfreigabe nicht ändern.
 4. **Der Starter** übergibt die Auswahl an einen neuen Codex-Prozess. Der Hauptagent entscheidet innerhalb der konfigurierten Obergrenze, ob/wann er die vorgesehenen Nebenrollen tatsächlich startet.
 5. **Der Nutzer** bestimmt Auftrag, optionales Qualitätsprofil, Live-Modell und Denkaufwand, eigene Regeldatei, Agentenobergrenze und ausdrückliche Schreibfreigabe. `Automatisch` bleibt die empfohlene Voreinstellung. Subagenten sind in dieser Version nur lesend.
@@ -27,11 +27,13 @@ Die Integration schreibt selbst weder `auth.json` noch Kontoeinstellungen; sie s
 
 Die Auto-Aufgabe lässt sich im Kontenfenster und direkt im Tray-Menü öffnen. Im Dialog Projektordner, Auftrag und optional Referenzbilder auswählen. Der zuletzt erfolgreich validierte Projektordner sowie Qualitätsprofil, Modell, Denkaufwand und Agentenobergrenze werden für den nächsten Aufruf wieder eingesetzt; die Schreibfreigabe bleibt nach jedem Öffnen sicherheitshalber aus. Projekt, optionale Regeldatei und Referenzbilder werden bereits während der Eingabe geprüft; ungültige Pfade halten die Startaktionen deaktiviert. Die Agentenobergrenze darf 0, 1 oder 2 sein; sie erzwingt keine Delegation. Schreibzugriff ist standardmässig aus und wird bei Aktivierung deutlich hervorgehoben. Ein Umsetzungsauftrag startet ohne explizite Schreibfreigabe nicht.
 
-**Einstufung ansehen** zeigt die Entscheidung, ohne den Projektauftrag auszuführen. Danach wird der Hauptbutton zu **Entscheidung starten**: Die bereits erzeugte strukturierte Einschätzung wird wiederverwendet, während Modellkatalog, Regeln, Profil, Modell, Denkaufwand, Projekt, Bilder und aktive Anmeldung vor dem Start erneut geprüft werden. So benötigt Vorschau plus Start keinen zweiten Klassifikationsaufruf. Ändern sich Auftrag, Bilder oder aktive Anmeldung, verfällt die zwischengespeicherte Einschätzung automatisch. Bei geänderter Auswahl muss die Entscheidung erst erneut angezeigt werden. **Mit Codex starten** stuft ohne Vorschau ein und öffnet direkt danach eine interaktive Codex-Konsole. Rückfragen zu Aktionen werden dort beantwortet.
+**Analyse & Plan** zeigt Ziel, Einstufung, Modellentscheidung, einen vorläufigen KI-Arbeitsplan und noch ungeprüfte Abschlusskriterien, ohne den Projektauftrag auszuführen. Die Schritte beruhen nur auf dem Eingangstext: Es sind weder inspizierte Projektbefunde noch Freigaben. Der ausführende Agent muss sie nach Sichtung des Projekts bestätigen, ändern oder verwerfen. Danach wird der Hauptbutton zu **Entscheidung starten**: Die bereits erzeugte strukturierte Einschätzung wird wiederverwendet, während Modellkatalog, Regeln, Profil, Modell, Denkaufwand, Projekt, Bilder und aktive Anmeldung vor dem Start erneut geprüft werden. So benötigt Vorschau plus Start keinen zweiten Klassifikationsaufruf. Ändern sich Auftrag, Bilder oder aktive Anmeldung, verfällt die zwischengespeicherte Einschätzung automatisch. Bei geänderter Auswahl muss die Entscheidung erst erneut angezeigt werden. **Mit Codex starten** stuft ohne Vorschau ein und öffnet direkt danach eine interaktive Codex-Konsole. Rückfragen zu Aktionen werden dort beantwortet.
 
 Während Einstufung oder Ausführung sind die Eingaben gesperrt, eine Laufanzeige nennt Zustand und Dauer, und ein mehrfacher Abbruch wird verhindert. **Abbrechen** beendet den von diesem Dialog gestarteten Prozessbaum, nicht beliebige ChatGPT-/Codex-Prozesse. **Schliessen** beendet nur den inaktiven Dialog; `Esc` bricht einen laufenden Router-Prozess ab und schliesst sonst das Fenster. `Strg+Enter` stuft nur ein, `Strg+Umschalt+Enter` startet automatisch. Vor und nach dem Lauf zeigt der Dialog die angeforderten Startparameter wie Projekt, Modus, Schreibfreigabe, Nebenrollen, Bilder und Regelquelle an; das ist keine Behauptung über bereits ausgeführte Arbeit. Bereits ausgeführte Änderungen werden nicht rückgängig gemacht. Das vorhandene **Notfall AUS** bleibt der Schalter für den Kontowechsel; für Router-Aufgaben den Abbrechen-Button beziehungsweise das Router-Terminal verwenden.
 
 Anmelden, neu anmelden, Konto hinzufügen, abmelden, manuell wechseln und Auto-Swap benutzen dieselbe Aktivitätssperre. Solange eine Auto-Aufgabe oder Kontoaktion läuft, bleiben konkurrierende Kontofunktionen deaktiviert und werden zusätzlich in der Service-Schicht abgewiesen. Ein sichtbarer Aktivitätsstatus zeigt Anmeldung, Abmeldung, Kontowechsel oder Router-Sperre an; Buttons besitzen klare Hover-, Fokus-, Tastatur- und Deaktiviert-Zustände.
+
+Die Buttons wechseln ihren Hover-Zustand sanft in rund 160 ms. Wenn Windows Animationen im Clientbereich deaktiviert, erfolgt der Zustandswechsel sofort; der Tastaturfokus bleibt sichtbar.
 
 ## Anpassbare Regeln
 
@@ -57,6 +59,8 @@ Die Dateien können vertrauliche Auftrags- und Projektinformationen enthalten. N
 
 `plan.json`, `prelaunch_check.json` und `requested_launch.json` belegen Entscheidungen, erneute Prüfung und angeforderte Parameter, nicht tatsächlich gestartete Subagenten oder bestandene fachliche Tests. `exit.json` nennt Exit-Code und ob `auth.json` während des Laufs geändert wurde; auch eine Token-Erneuerung kann dafür verantwortlich sein. Ein Exit-Code 0 ist kein Qualitätsnachweis.
 
+`plan_steps` in `plan.json` sind Vorschläge aus der Eingangsprüfung. Die JSON-Prüfung begrenzt Länge, Anzahl und Steuerzeichen. Ein Plantext darf keine Berechtigungen oder Sicherheitsregeln verändern.
+
 ## Grenzen
 
 Kein automatischer Modellwechsel mitten im laufenden Turn, keine Hintergrundüberwachung, keine automatische Kontorotation für diese CLI-Aufträge, kein Tokenbudget-Wächter, keine Leistungs- oder Spargarantie. Ein Modellkatalog belegt angebotene Optionen, nicht ausreichendes Restkontingent für den gesamten Auftrag.
@@ -79,3 +83,5 @@ Stand der Integrationsprüfung: 27. September 2026. Für die installierte Versio
 - [CLI reference](https://developers.openai.com/codex/cli/reference)
 - [Configuration reference](https://developers.openai.com/codex/config-reference)
 - [Subagents](https://developers.openai.com/codex/subagents)
+- [Strukturierte Ausgaben und unterstützte JSON-Schema-Felder](https://developers.openai.com/api/docs/guides/structured-outputs)
+- [Windows-Einstellung für Clientbereich-Animationen](https://learn.microsoft.com/en-us/windows/win32/winauto/client-area-animation)

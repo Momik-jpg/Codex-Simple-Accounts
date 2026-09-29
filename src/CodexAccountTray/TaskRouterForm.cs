@@ -52,7 +52,7 @@ public static class TaskRouterFormState
         }
         else
         {
-            status = "Bereit: Einstufung ansehen oder direkt mit Codex starten.";
+            status = "Bereit: Analyse & Plan ansehen oder direkt mit Codex starten.";
         }
         return new TaskRouterControlState(
             projectReady && taskReady && policyReady && imagesReady,
@@ -100,7 +100,7 @@ public sealed class TaskRouterForm : Form
     private readonly RoundedButton _chooseImages = new() { Text = "Bilder hinzufügen", Size = new Size(150, 36) };
     private readonly RoundedButton _clearImages = new() { Text = "Leeren", Size = new Size(82, 36), Enabled = false };
     private readonly RoundedButton _resetOptions = new() { Text = "Auto zurücksetzen", Size = new Size(145, 34) };
-    private readonly RoundedButton _plan = new() { Text = "Einstufung ansehen", Size = new Size(174, 44) };
+    private readonly RoundedButton _plan = new() { Text = "Analyse & Plan", Size = new Size(174, 44) };
     private readonly RoundedButton _run = new() { Text = "Mit Codex starten", Size = new Size(205, 44) };
     private readonly RoundedButton _cancel = new() { Text = "Abbrechen", Size = new Size(125, 44), Enabled = false };
     private readonly RoundedButton _logs = new() { Text = "Laufordner", Size = new Size(125, 44), Enabled = false };
@@ -233,7 +233,7 @@ public sealed class TaskRouterForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "Automatisch optimieren oder Qualitätsprofil und Denkaufwand selbst festlegen. Verwendet werden nur live angebotene Modelle.",
+            Text = "Auftrag bewerten, KI-Arbeitsplan prüfen und erst danach mit einem live angebotenen Modell starten.",
             ForeColor = Muted,
             AutoSize = false,
             AutoEllipsis = true,
@@ -300,7 +300,7 @@ public sealed class TaskRouterForm : Form
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI Semibold", 10)
         }, 0, 8);
-        _report.Text = "Noch keine Einstufung. «Einstufung ansehen» führt den Projektauftrag nicht aus.";
+        _report.Text = "Noch keine Analyse. «Analyse & Plan» erstellt einen vorläufigen Arbeitsplan, führt den Projektauftrag aber nicht aus.";
         layout.Controls.Add(_report, 0, 9);
 
         var buttons = new FlowLayoutPanel
@@ -341,7 +341,7 @@ public sealed class TaskRouterForm : Form
 
         _inputs.AddRange([_project, _policy, _task, _projectBrowse, _policyBrowse, _chooseImages,
             _profile, _model, _effort, _refreshModels, _resetOptions, _agents, _write]);
-        _toolTip.SetToolTip(_plan, "Entscheidung anzeigen, ohne den Projektauftrag auszuführen · Strg+Enter");
+        _toolTip.SetToolTip(_plan, "Auftrag bewerten und vorläufigen KI-Arbeitsplan anzeigen, ohne ihn auszuführen · Strg+Enter");
         _toolTip.SetToolTip(_run, "Neue Codex-Sitzung starten · Strg+Umschalt+Enter");
         _toolTip.SetToolTip(_cancel, "Nur den von diesem Dialog gestarteten Prozessbaum beenden · Esc");
         _toolTip.SetToolTip(_write, "Gilt nur für beauftragte lokale Änderungen; keine Veröffentlichung oder Zusammenführung.");
@@ -352,7 +352,7 @@ public sealed class TaskRouterForm : Form
         _toolTip.SetToolTip(_effort, "Nur Denkstufen aus dem aktuellen Live-Katalog werden verwendet. Maximum/Ultra müssen ausdrücklich gewählt werden.");
         _toolTip.SetToolTip(_resetOptions, "Automatische Auswahl, zwei mögliche Nebenrollen und Schreibzugriff AUS.");
         _run.AccessibleName = "Aufgabe mit Codex starten";
-        _plan.AccessibleName = "Aufgabe nur einstufen";
+        _plan.AccessibleName = "Aufgabe bewerten und vorläufigen KI-Arbeitsplan anzeigen";
         Controls.Add(layout);
     }
 
@@ -773,7 +773,7 @@ public sealed class TaskRouterForm : Form
                        (!CanReuseAssessment() || CanReuseDecision());
         bool reuseAssessment = CanReuseAssessment();
         bool reuseDecision = CanReuseDecision();
-        _plan.Text = reuseDecision ? "Erneut einstufen" : reuseAssessment ? "Auswahl prüfen" : "Einstufung ansehen";
+        _plan.Text = reuseDecision ? "Plan erneuern" : reuseAssessment ? "Auswahl prüfen" : "Analyse & Plan";
         _run.Text = reuseDecision ? "Entscheidung starten" : "Mit Codex starten";
         _toolTip.SetToolTip(_run, reuseAssessment
             ? "Vorhandene Einschätzung verwenden; Live-Modelle und Regeln werden erneut geprüft · Strg+Umschalt+Enter"

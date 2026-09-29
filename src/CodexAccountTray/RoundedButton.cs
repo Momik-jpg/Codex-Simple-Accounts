@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace CodexAccountTray;
 
@@ -9,6 +10,9 @@ public sealed class RoundedButton : Button
     private int _cornerRadius = 10;
     private bool _pressed;
     private bool _hovered;
+    private float _hoverProgress;
+    private float _hoverTarget;
+    private readonly System.Windows.Forms.Timer _hoverTimer = new() { Interval = 16 };
 
     public RoundedButton()
     {
@@ -24,6 +28,13 @@ public sealed class RoundedButton : Button
             ControlStyles.OptimizedDoubleBuffer |
             ControlStyles.ResizeRedraw,
             true);
+        _hoverTimer.Tick += (_, _) => AdvanceHoverAnimation();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _hoverTimer.Dispose();
+        base.Dispose(disposing);
     }
 
     [DefaultValue(10)]
@@ -55,9 +66,7 @@ public sealed class RoundedButton : Button
             ? Color.FromArgb(45, 48, 51)
             : _pressed
                 ? Blend(_normalColor, Color.Black, 0.18f)
-                : _hovered || Focused
-                    ? Blend(_normalColor, Color.White, 0.10f)
-                    : _normalColor;
+                : Blend(_normalColor, Color.White, _hoverProgress * 0.10f);
         using var brush = new SolidBrush(fill);
         eventArgs.Graphics.FillPath(brush, path);
         Rectangle textBounds = _pressed
@@ -91,7 +100,7 @@ public sealed class RoundedButton : Button
     {
         base.OnMouseEnter(eventArgs);
         _hovered = true;
-        Invalidate();
+        UpdateHoverTarget();
     }
 
     protected override void OnMouseUp(MouseEventArgs eventArgs)
@@ -106,7 +115,7 @@ public sealed class RoundedButton : Button
         base.OnMouseLeave(eventArgs);
         _hovered = false;
         _pressed = false;
-        Invalidate();
+        UpdateHoverTarget();
     }
 
     protected override void OnKeyDown(KeyEventArgs eventArgs)
@@ -132,20 +141,53 @@ public sealed class RoundedButton : Button
     protected override void OnGotFocus(EventArgs eventArgs)
     {
         base.OnGotFocus(eventArgs);
-        Invalidate();
+        UpdateHoverTarget();
     }
 
     protected override void OnLostFocus(EventArgs eventArgs)
     {
         base.OnLostFocus(eventArgs);
         _pressed = false;
-        Invalidate();
+        UpdateHoverTarget();
     }
 
     protected override void OnEnabledChanged(EventArgs eventArgs)
     {
         base.OnEnabledChanged(eventArgs);
         Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+        UpdateHoverTarget();
+        Invalidate();
+    }
+
+    private void UpdateHoverTarget()
+    {
+        _hoverTarget = Enabled && (_hovered || Focused) ? 1f : 0f;
+        if (!MotionPreferences.AnimationsEnabled)
+        {
+            _hoverTimer.Stop();
+            _hoverProgress = _hoverTarget;
+            Invalidate();
+            return;
+        }
+        if (Math.Abs(_hoverProgress - _hoverTarget) > 0.001f)
+            _hoverTimer.Start();
+        Invalidate();
+    }
+
+    private void AdvanceHoverAnimation()
+    {
+        if (!MotionPreferences.AnimationsEnabled)
+        {
+            _hoverProgress = _hoverTarget;
+        }
+        else
+        {
+            float direction = Math.Sign(_hoverTarget - _hoverProgress);
+            _hoverProgress = Math.Clamp(_hoverProgress + direction * 0.1f, 0f, 1f);
+            if (Math.Abs(_hoverProgress - _hoverTarget) < 0.101f)
+                _hoverProgress = _hoverTarget;
+        }
+        if (_hoverProgress == _hoverTarget) _hoverTimer.Stop();
         Invalidate();
     }
 
@@ -168,4 +210,16 @@ public sealed class RoundedButton : Button
         path.CloseFigure();
         return path;
     }
+}
+
+internal static class MotionPreferences
+{
+    private const uint GetClientAreaAnimation = 0x1042;
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern bool SystemParametersInfoW(uint action, uint parameter, out int value, uint flags);
+
+    public static bool AnimationsEnabled =>
+        OperatingSystem.IsWindows() &&
+        SystemParametersInfoW(GetClientAreaAnimation, 0, out int enabled, 0) && enabled != 0;
 }
