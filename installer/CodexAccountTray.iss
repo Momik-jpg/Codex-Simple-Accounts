@@ -1,5 +1,5 @@
 #define AppName "Codex-Konten"
-#define AppVersion "1.5.5"
+#define AppVersion "1.6.0"
 #define AppExeName "Codex-Konten.exe"
 
 [Setup]
@@ -24,18 +24,18 @@ UninstallDisplayName={#AppName}
 Uninstallable=yes
 CreateUninstallRegKey=yes
 SetupIconFile=..\assets\Codex-Konten.ico
-VersionInfoVersion=1.5.5.0
+VersionInfoVersion=1.6.0.0
 VersionInfoCompany=Andrin
 VersionInfoDescription=Codex-Konten Installer
 VersionInfoProductName=Codex-Konten
-VersionInfoProductVersion=1.5.5
+VersionInfoProductVersion=1.6.0
 CloseApplications=yes
 RestartApplications=no
 ChangesEnvironment=yes
 SetupLogging=yes
 
 [Files]
-Source: "..\artifacts\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\artifacts\publish\*"; DestDir: "{app}"; Excludes: "TaskRouter\tests\*,*.pyc,__pycache__\*"; Flags: ignoreversion recursesubdirs
 
 [InstallDelete]
 Type: files; Name: "{userstartup}\Codex-Konten.lnk"
