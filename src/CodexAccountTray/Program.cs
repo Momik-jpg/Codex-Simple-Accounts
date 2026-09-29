@@ -43,7 +43,7 @@ static class Program
                 accountStore,
                 protocolClient,
                 processManager,
-                TimeSpan.FromSeconds(30),
+                TimeSpan.FromMinutes(1),
                 () => settingsStore.Load().AutoSwitchEnabled && !taskRouterActivity.IsBusy);
             Action<Form> openTaskRouter = TaskRouterIntegration.CreateOpenHandler(
                 command, processManager, settingsStore, taskRouterActivity);

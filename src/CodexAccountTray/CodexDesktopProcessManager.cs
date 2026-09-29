@@ -58,11 +58,17 @@ public sealed class CodexDesktopRuntime : ICodexDesktopRuntime
         Process.Start(startInfo)?.Dispose();
     }
 
-    private static Process[] FindCodexProcesses()
+    internal static Process[] FindCodexProcesses()
     {
-        return Process.GetProcessesByName("ChatGPT")
-            .Where(IsCodexPackageProcess)
-            .ToArray();
+        var matches = new List<Process>();
+        foreach (Process process in Process.GetProcessesByName("ChatGPT"))
+        {
+            if (IsCodexPackageProcess(process))
+                matches.Add(process);
+            else
+                process.Dispose();
+        }
+        return matches.ToArray();
     }
 
     private static bool IsCodexPackageProcess(Process process)

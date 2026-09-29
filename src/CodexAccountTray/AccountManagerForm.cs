@@ -92,6 +92,7 @@ public sealed class AccountManagerForm : Form
     {
         bool routerActive = _taskRouterActivity.IsActive;
         bool accountActivity = _operationInProgress || _taskRouterActivity.IsBusy;
+        bool autoSwitchEnabled = _settingsStore.Load().AutoSwitchEnabled;
         int[] accounts = _accountStore.AccountNumbers.ToArray();
         if (!_accountCards.Keys.Order().SequenceEqual(accounts))
         {
@@ -102,10 +103,12 @@ public sealed class AccountManagerForm : Form
             bool loggedIn = _accountStore.IsLoggedIn(account);
             bool active = _processManager.ActiveAccount == account;
             bool pending = _processManager.PendingAccount == account;
+            bool waiting = autoSwitchEnabled && _monitor.WaitingForCloseAccount == account;
             _statusLabels[account].Text = pending
                 ? "Kontowechsel läuft …"
+                : waiting ? "Wechsel nach Schliessen"
                 : active ? "Aktiv" : loggedIn ? "Angemeldet" : "Nicht angemeldet";
-            _statusLabels[account].ForeColor = active || pending ? Success : Muted;
+            _statusLabels[account].ForeColor = active || pending || waiting ? Success : Muted;
             _activeIndicators[account].Visible = active || pending;
             _accountCards[account].IsActive = active || pending;
             _nameLabels[account].Text = _accountStore.DisplayName(account);
@@ -117,20 +120,22 @@ public sealed class AccountManagerForm : Form
                                              _processManager.PendingAccount is null && !accountActivity;
 
             _monitor.Current.TryGetValue(account, out AccountLimits? limits);
-            string stale = limits?.IsStale == true ? "  · veraltet" : string.Empty;
+            string checkedAt = limits is null
+                ? loggedIn ? "Noch nicht geprüft" : string.Empty
+                : $"{(limits.IsStale ? "Veraltet" : "Geprüft")} {limits.CheckedAt.ToLocalTime():HH:mm}";
             _limitLabels[account].Text =
                 LimitTextFormatter.Format(limits?.Primary, "5 h", TimeZoneInfo.Local) + Environment.NewLine +
-                LimitTextFormatter.Format(limits?.Secondary, "Woche", TimeZoneInfo.Local) + stale;
+                LimitTextFormatter.Format(limits?.Secondary, "Woche", TimeZoneInfo.Local) + Environment.NewLine + checkedAt;
         }
 
         _addAccountButton.Enabled = !_processManager.IsRunning && !accountActivity;
-        _autoSwitch.Checked = _settingsStore.Load().AutoSwitchEnabled;
+        _autoSwitch.Checked = autoSwitchEnabled;
         _autoSwitch.Enabled = !accountActivity;
         _autoSwitch.Text = routerActive
             ? "Auto-Swap gesperrt · Auto-Aufgabe läuft"
             : accountActivity
                 ? "Auto-Swap pausiert · Kontoaktion läuft"
-                : "Auto-Swap: 5 h 1 % · Woche 0 %";
+                : "Auto-Swap nach Schliessen · 1 % / 0 %";
 
         int? pendingAccount = _processManager.PendingAccount;
         _activityStatus.Text = routerActive
@@ -138,6 +143,8 @@ public sealed class AccountManagerForm : Form
             : _operationDescription
               ?? (pendingAccount is not null
                   ? $"Wechsel zu {_accountStore.DisplayName(pendingAccount.Value)} läuft · ChatGPT wird neu gestartet."
+                  : autoSwitchEnabled && _monitor.WaitingForCloseAccount is int waitingAccount
+                    ? $"Limit erreicht · {_accountStore.DisplayName(waitingAccount)} startet nach dem Schliessen der Codex-App."
                   : string.Empty);
         _activityStatus.Visible = _activityStatus.Text.Length > 0;
         _activityStatus.ForeColor = routerActive ? Success : Color.FromArgb(112, 170, 240);
@@ -196,7 +203,7 @@ public sealed class AccountManagerForm : Form
 
         var hint = new Label
         {
-            Text = "Alle 30 Sek.  ·  Strg + Alt + R",
+            Text = "Alle 60 Sek.  ·  Strg + Alt + R",
             ForeColor = Muted,
             AutoSize = true,
             Location = new Point(220, 625),
@@ -204,7 +211,7 @@ public sealed class AccountManagerForm : Form
         };
         Controls.Add(hint);
 
-        _autoSwitch.Text = "Auto-Swap: 5 h 1 % · Woche 0 %";
+        _autoSwitch.Text = "Auto-Swap nach Schliessen · 1 % / 0 %";
         _autoSwitch.AutoSize = false;
         _autoSwitch.Size = new Size(310, 30);
         _autoSwitch.ForeColor = Color.White;

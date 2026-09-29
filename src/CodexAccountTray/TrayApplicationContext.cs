@@ -196,7 +196,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
             ? "Auto-Swap gesperrt · Auto-Aufgabe läuft"
             : accountActivity
                 ? "Auto-Swap pausiert · Kontoaktion läuft"
-                : "Auto-Swap: 5 h 1 % · Woche 0 %";
+                : "Auto-Swap nach Schliessen · 1 % / 0 %";
         var autoSwap = new ToolStripMenuItem(autoSwapText)
         {
             Checked = _settingsStore.Load().AutoSwitchEnabled,
@@ -251,10 +251,14 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         _monitor.Current.TryGetValue(account, out AccountLimits? limits);
         string status = pending
             ? "ChatGPT wird neu gestartet"
+            : _settingsStore.Load().AutoSwitchEnabled && _monitor.WaitingForCloseAccount == account
+                ? "Wechsel nach Schliessen"
             : active ? "Aktiv" : loggedIn ? "Angemeldet" : "Nicht angemeldet";
         string text = $"{_accountStore.DisplayName(account)}  ·  {status}\n" +
                       LimitTextFormatter.Format(limits?.Primary, "5 h", TimeZoneInfo.Local) + "\n" +
-                      LimitTextFormatter.Format(limits?.Secondary, "Woche", TimeZoneInfo.Local);
+                      LimitTextFormatter.Format(limits?.Secondary, "Woche", TimeZoneInfo.Local) + "\n" +
+                      (limits is null ? "Noch nicht geprüft" :
+                          $"{(limits.IsStale ? "Veraltet" : "Geprüft")} {limits.CheckedAt.ToLocalTime():HH:mm}");
         var item = new ToolStripMenuItem(text)
         {
             AutoSize = true,

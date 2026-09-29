@@ -215,6 +215,61 @@ public sealed class SmoothCodexProcessManagerTests
         }
     }
 
+    [Fact]
+    public async Task FailedFirstLaunchRemovesNewCredential()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"SmoothFirstFailure-{Guid.NewGuid():N}");
+        var store = new AccountStore(new AppPaths(Path.Combine(root, "tray")));
+        store.Save(1, Auth(1));
+        string codexHome = Path.Combine(root, ".codex");
+        var manager = new SmoothCodexProcessManager(store,
+            new CodexCommand("dotnet", [typeof(FakeCodex.Marker).Assembly.Location]),
+            codexHome, new FakeDesktopRuntime { ThrowOnLaunch = true });
+        try
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                manager.StartAsync(1, false, CancellationToken.None));
+            Assert.False(File.Exists(Path.Combine(codexHome, "auth.json")));
+            Assert.Null(manager.ActiveAccount);
+        }
+        finally
+        {
+            manager.Dispose();
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task FailedLaunchRestoresUntrackedCredentialExactly()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"SmoothRestore-{Guid.NewGuid():N}");
+        var store = new AccountStore(new AppPaths(Path.Combine(root, "tray")));
+        store.Save(1, Auth(1));
+        string codexHome = Path.Combine(root, ".codex");
+        Directory.CreateDirectory(codexHome);
+        byte[] original = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            tokens = new { account_id = "not-in-tray" }
+        });
+        string authFile = Path.Combine(codexHome, "auth.json");
+        File.WriteAllBytes(authFile, original);
+        var manager = new SmoothCodexProcessManager(store,
+            new CodexCommand("dotnet", [typeof(FakeCodex.Marker).Assembly.Location]),
+            codexHome, new FakeDesktopRuntime { ThrowOnLaunch = true });
+        try
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                manager.StartAsync(1, false, CancellationToken.None));
+            Assert.Equal(original, File.ReadAllBytes(authFile));
+            Assert.Null(manager.ActiveAccount);
+        }
+        finally
+        {
+            manager.Dispose();
+            Directory.Delete(root, true);
+        }
+    }
+
     private static byte[] Auth(int account) => JsonSerializer.SerializeToUtf8Bytes(new
     {
         tokens = new { account_id = $"account-{account}", id_token = "a.e30." }
@@ -223,6 +278,7 @@ public sealed class SmoothCodexProcessManagerTests
     private sealed class FakeDesktopRuntime : IProxyDesktopRuntime
     {
         public bool IsRunning { get; set; }
+        public bool ThrowOnLaunch { get; set; }
         public int CloseCount { get; private set; }
         public int LaunchCount { get; private set; }
         public Uri? ProxyUri { get; private set; }
@@ -235,6 +291,8 @@ public sealed class SmoothCodexProcessManagerTests
         }
         public void Launch()
         {
+            if (ThrowOnLaunch)
+                throw new InvalidOperationException("Test launch failure");
             LaunchCount++;
             IsRunning = true;
         }

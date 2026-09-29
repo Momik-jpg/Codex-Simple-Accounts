@@ -163,13 +163,71 @@ public sealed class LimitMonitorTests
         }
     }
 
+    [Fact]
+    public async Task RefreshAsync_WaitsForDesktopCloseBeforeAutoSwitch()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"CodexMonitor-{Guid.NewGuid():N}");
+        var paths = new AppPaths(root);
+        var store = new AccountStore(paths);
+        store.Save(1, Encoding.UTF8.GetBytes("account-1"));
+        store.Save(2, Encoding.UTF8.GetBytes("account-2"));
+        var protocol = new FakeProtocolClient(new Dictionary<int, int> { [1] = 1, [2] = 80 });
+        var process = new FakeProcessManager { LastAccount = 1, IsDesktopRunning = true };
+        using var monitor = new LimitMonitor(paths, store, protocol, process, TimeSpan.FromMinutes(9));
+        try
+        {
+            await monitor.RefreshAsync(CancellationToken.None);
+            Assert.Null(process.StartedAccount);
+            Assert.Equal(2, monitor.WaitingForCloseAccount);
+
+            process.IsDesktopRunning = false;
+            await monitor.RefreshAsync(CancellationToken.None);
+            Assert.Equal(2, process.StartedAccount);
+            Assert.Null(monitor.WaitingForCloseAccount);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task RefreshAsync_StaleLimitNeverStartsDeferredSwitch()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"CodexMonitor-{Guid.NewGuid():N}");
+        var paths = new AppPaths(root);
+        var store = new AccountStore(paths);
+        store.Save(1, Encoding.UTF8.GetBytes("account-1"));
+        store.Save(2, Encoding.UTF8.GetBytes("account-2"));
+        var protocol = new FakeProtocolClient(new Dictionary<int, int> { [1] = 1, [2] = 80 });
+        var process = new FakeProcessManager { LastAccount = 1, IsDesktopRunning = true };
+        using var monitor = new LimitMonitor(paths, store, protocol, process, TimeSpan.FromMinutes(9));
+        try
+        {
+            await monitor.RefreshAsync(CancellationToken.None);
+            protocol.FailingAccounts.Add(1);
+            process.IsDesktopRunning = false;
+            await monitor.RefreshAsync(CancellationToken.None);
+            Assert.True(monitor.Current[1].IsStale);
+            Assert.Null(process.StartedAccount);
+            Assert.Null(monitor.WaitingForCloseAccount);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private sealed class FakeProtocolClient(
         IReadOnlyDictionary<int, int> primaryRemaining,
         IReadOnlyDictionary<int, int>? secondaryRemaining = null) : ICodexProtocolClient
     {
+        public HashSet<int> FailingAccounts { get; } = [];
         public Task<AccountLimits> ReadLimitsAsync(string codexHome, CancellationToken cancellationToken)
         {
             int account = int.Parse(Path.GetFileName(codexHome));
+            if (FailingAccounts.Contains(account))
+                throw new InvalidOperationException("Probe failed");
             int primaryUsed = 100 - primaryRemaining[account];
             int secondaryUsed = 100 - (secondaryRemaining?.GetValueOrDefault(account) ?? 80);
             return Task.FromResult(new AccountLimits(
@@ -179,9 +237,12 @@ public sealed class LimitMonitorTests
         }
     }
 
-    private sealed class FakeProcessManager : ICodexProcessManager
+    private sealed class FakeProcessManager : ICodexProcessManager, ISmoothSwitchControl
     {
         public bool IsRunning { get; set; }
+        public bool IsDesktopRunning { get; set; }
+        public bool ProxyActive => false;
+        public bool HasActiveTurn => false;
         public int? ActiveAccount { get; set; }
         public int? PendingAccount => null;
         public int? LastAccount { get; set; }
@@ -192,6 +253,9 @@ public sealed class LimitMonitorTests
         public event EventHandler? ProcessExited;
 
         public void RaiseProcessExited() => ProcessExited?.Invoke(this, EventArgs.Empty);
+        public void SynchronizeActiveAccount() { }
+        public Task EmergencyStopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task LogoutAsync(int accountNumber, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task StartAsync(int accountNumber, bool resumeLast, CancellationToken cancellationToken)
         {
