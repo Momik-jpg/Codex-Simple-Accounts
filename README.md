@@ -75,10 +75,14 @@ python tools/verify_metadata.py
 ## Hinweis
 
 Dieses Projekt ist ein unabhängiges Hilfsprogramm und nicht mit OpenAI verbunden oder von OpenAI unterstützt.
-Die [OpenAI-Nutzungsbedingungen für die Schweiz](https://openai.com/policies/eu-terms-of-use/)
-verbieten die Umgehung von Rate-Limits. Der automatische Kontowechsel bei
-erreichtem Limit ist deshalb für v1.6.0 noch ein offener Richtlinienkonflikt;
-dieser Release-Kandidat darf bis zur Klärung nicht veröffentlicht werden.
+Auto-Swap bleibt auf Wunsch des Projektinhabers erhalten. Die
+[OpenAI-Hilfe zum Kontowechsel](https://help.openai.com/en/articles/20001068-use-multiple-accounts-with-account-switching)
+beschreibt mehrere getrennte Konten und den manuellen Wechsel im Web, nicht
+jedoch Auto-Swap in Codex Desktop. Die
+[Nutzungsbedingungen für die Schweiz](https://openai.com/policies/eu-terms-of-use/)
+untersagen die Umgehung von Rate-Limits. Ob ein automatischer Wechsel zwischen
+eigenen, separat bezahlten Konten zulässig ist, wird hier nicht als geklärt
+behauptet; vor Veröffentlichung ist diese Frage unabhängig zu prüfen.
 
 
 ## Lizenz
