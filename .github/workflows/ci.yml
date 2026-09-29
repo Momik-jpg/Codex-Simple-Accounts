@@ -38,7 +38,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path 'artifacts/router-smoke/Codex-Konten.exe')) { throw 'Release executable missing' }
           $expectedVersion = ([xml](Get-Content 'src/CodexAccountTray/CodexAccountTray.csproj')).Project.PropertyGroup.Version
-          if ((Get-Item 'artifacts/router-smoke/Codex-Konten.exe').VersionInfo.ProductVersion -ne $expectedVersion) { throw 'Release executable version mismatch' }
+          $actualFileVersion = (Get-Item 'artifacts/router-smoke/Codex-Konten.exe').VersionInfo.FileVersion
+          if ($actualFileVersion -ne "$expectedVersion.0") { throw "Release executable file version mismatch: $actualFileVersion" }
           $required = @('desktop_entry.py', 'router.py', 'routing_policy.json', 'assessment.schema.json', 'prompts/triage.txt', 'task-router/SKILL.md')
           foreach ($file in $required) {
             if (-not (Test-Path "artifacts/router-smoke/TaskRouter/$file")) { throw "Missing router asset: $file" }
