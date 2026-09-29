@@ -36,7 +36,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet publish src/CodexAccountTray/CodexAccountTray.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/router-smoke
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tools/package_licenses.ps1 -Project src/CodexAccountTray/CodexAccountTray.csproj -Publish artifacts/router-smoke
           if (-not (Test-Path 'artifacts/router-smoke/Codex-Konten.exe')) { throw 'Release executable missing' }
+          $licenses = @('LICENSE.txt', 'THIRD_PARTY_LICENSES.md', 'Licenses/dotnet-runtime-LICENSE.txt', 'Licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt', 'Licenses/windowsdesktop-runtime-LICENSE.txt')
+          foreach ($file in $licenses) {
+            if (-not (Test-Path "artifacts/router-smoke/$file")) { throw "Missing license notice: $file" }
+          }
           $expectedVersion = ([xml](Get-Content 'src/CodexAccountTray/CodexAccountTray.csproj')).Project.PropertyGroup.Version
           $actualFileVersion = (Get-Item 'artifacts/router-smoke/Codex-Konten.exe').VersionInfo.FileVersion
           if ($actualFileVersion -ne "$expectedVersion.0") { throw "Release executable file version mismatch: $actualFileVersion" }

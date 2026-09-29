@@ -7,13 +7,15 @@ Kontowechsel stellen bei fehlgeschlagenem Start die vorherige Anmeldung wieder h
 Lokaler Buildkandidat, **nicht hochgeladen oder installiert**:
 
 - Datei: `Codex-Konten-Installer.exe`
-- Grösse: `34'540'912` Bytes
-- SHA-256: `6DBE66ADD3AAF7F2E96ED660E57901812F693F1B6119501542073A34F489272A`
+- Grösse: `34'543'001` Bytes
+- SHA-256: `FC68D7D1A9E1B3888CCF2F05B2A027CFF3BB5F7EC7E686F5335026252EB4EBEE`
 - Automatische Prüfungen: 95 .NET-Tests, 75 Python-Tests, `dotnet format`, Release-Build und Inno-Kompilierung bestanden. NuGet-Auditdaten waren aus der Sandbox nicht erreichbar (`NU1900`); ein früherer gezielter Audit fand keine gemeldeten Schwachstellen.
 - Voraussetzungen für den Router: Windows, Python 3.10+, aktuelle angemeldete Codex-CLI, Auto-Swap aus. Modellangebote hängen vom aktiven Konto ab.
 - Bekannte Einschränkung: Der lokale Installer ist nicht code-signiert. Windows kann deshalb eine Herausgeber-/SmartScreen-Warnung anzeigen; eine solche Warnung darf im Abnahmetest nicht automatisiert umgangen werden.
+- Lizenzhinweise: Der Installer zeigt die Projekt-MIT-Lizenz und installiert die Original-Lizenztexte der gebündelten .NET-Laufzeit samt Drittanbieterhinweisen. Details: [Lizenz- und Drittanbieterhinweise](docs/THIRD_PARTY_LICENSES.md).
+- Richtlinienprüfung offen: Der automatische Kontowechsel beim Erreichen eines Nutzungslimits kann mit dem Verbot der Umgehung von Rate-Limits in den OpenAI-Nutzungsbedingungen kollidieren. Der Release bleibt blockiert, bis die Produktentscheidung dazu umgesetzt und geprüft ist. Auch kommerzielle Nutzung des lokalen Inno-Setup-Compilers und Rechte am App-Icon sind nicht nachgewiesen.
 
-**Offen:** Windows-UI-Abnahme bei verschiedenen DPI-Werten einschliesslich Animation aus, separates Testkonto/Wegwerfprojekt, Clean-Install, Upgrade von v1.5.5, Deinstallation/Neuinstallation, Review und Merge von [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7), Abschluss von Issue #6 und Upload zum bestehenden Release-Entwurf. Die [PR-CI für den neuen Codecommit](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/runs/36547963005) ist grün. Details und Unsicherheiten: [Windows-Abnahme](docs/WINDOWS_ACCEPTANCE_V1_6.md). Dieser Kandidat darf nicht veröffentlicht werden.
+**Offen:** Windows-UI-Abnahme bei verschiedenen DPI-Werten einschliesslich Animation aus, separates Testkonto/Wegwerfprojekt, Clean-Install, Upgrade von v1.5.5, Deinstallation/Neuinstallation, Richtlinienklärung, Review und Merge von [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7), Abschluss von Issue #6 und Upload zum bestehenden Release-Entwurf. Die CI für die Lizenzänderung wurde noch nicht ausgeführt. Details und Unsicherheiten: [Windows-Abnahme](docs/WINDOWS_ACCEPTANCE_V1_6.md). Dieser Kandidat darf nicht veröffentlicht werden.
 
 # v1.5.5
 

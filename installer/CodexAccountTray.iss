@@ -24,6 +24,7 @@ UninstallDisplayName={#AppName}
 Uninstallable=yes
 CreateUninstallRegKey=yes
 SetupIconFile=..\assets\Codex-Konten.ico
+LicenseFile=..\artifacts\publish\LICENSE.txt
 VersionInfoVersion=1.6.0.0
 VersionInfoCompany=Andrin
 VersionInfoDescription=Codex-Konten Installer

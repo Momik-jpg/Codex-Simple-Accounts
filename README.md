@@ -75,8 +75,13 @@ python tools/verify_metadata.py
 ## Hinweis
 
 Dieses Projekt ist ein unabhängiges Hilfsprogramm und nicht mit OpenAI verbunden oder von OpenAI unterstützt.
+Die [OpenAI-Nutzungsbedingungen für die Schweiz](https://openai.com/policies/eu-terms-of-use/)
+verbieten die Umgehung von Rate-Limits. Der automatische Kontowechsel bei
+erreichtem Limit ist deshalb für v1.6.0 noch ein offener Richtlinienkonflikt;
+dieser Release-Kandidat darf bis zur Klärung nicht veröffentlicht werden.
 
 
 ## Lizenz
 
-MIT – siehe [LICENSE](LICENSE).
+MIT – siehe [LICENSE](LICENSE). Hinweise zu mitgelieferten .NET-Komponenten,
+externen Werkzeugen und Drittanbietern stehen unter [Lizenz- und Drittanbieterhinweise](docs/THIRD_PARTY_LICENSES.md).
