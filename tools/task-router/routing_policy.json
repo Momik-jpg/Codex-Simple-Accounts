@@ -3,9 +3,10 @@
   "priority": "quality_first",
   "models": {
     "fast": ["gpt-6-luna", "gpt-5.6-luna"],
-    "balanced": ["gpt-6-sol", "gpt-5.6-sol"],
+    "balanced": ["gpt-6-sol", "gpt-5.6-sol", "gpt-5.5"],
     "deep": ["gpt-6-astra"]
   },
+  "classifier_models": ["gpt-6-sol", "gpt-5.6-sol"],
   "weights": {"reasoning": 2, "ambiguity": 1, "coupling": 1, "visual": 2, "failure_impact": 1, "verification_difficulty": 1},
   "thresholds": {"fast_max": 5, "balanced_max": 13},
   "max_subagents": 2,

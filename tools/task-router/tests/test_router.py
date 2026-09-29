@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -107,6 +108,53 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(plan['effort'], 'high')
         self.assertEqual(plan['effort_preference'], 'high')
 
+    def test_manual_model_is_selected_from_live_catalog_and_policy(self):
+        plan = self.plan(model_preference='gpt-6-sol')
+        self.assertEqual(plan['model'], 'gpt-6-sol')
+        self.assertEqual(plan['model_preference'], 'gpt-6-sol')
+        self.assertTrue(any('Manuell gewähltes Live-Modell' in x for x in plan['reasons']))
+
+    def test_manual_model_cannot_bypass_deep_safety_floor(self):
+        with self.assertRaisesRegex(r.RouterError, 'mindestens deep'):
+            self.plan(self.umr, model_preference='gpt-6-luna')
+
+    def test_manual_model_must_be_in_live_catalog(self):
+        with self.assertRaisesRegex(r.RouterError, 'Live-Katalog'):
+            self.plan(model_preference='not-live')
+
+    def test_manual_unsupported_effort_fails_instead_of_silent_fallback(self):
+        cat = copy.deepcopy(self.catalog)
+        cat[0]['efforts'] = ['low']
+        with self.assertRaisesRegex(r.RouterError, 'Denkstufe high'):
+            r.decide(self.simple, cat, self.p, model_preference='gpt-6-luna',
+                     effort_preference='high')
+
+    def test_strong_safety_floor_overrides_manual_low_effort(self):
+        plan = self.plan(self.umr, effort_preference='low')
+        self.assertEqual(plan['effort'], 'high')
+        self.assertTrue(any('Sicherheitsregel erzwingt' in x for x in plan['reasons']))
+
+    def test_safety_floor_selects_another_capable_deep_model(self):
+        cat = copy.deepcopy(self.catalog)
+        policy = copy.deepcopy(self.p)
+        policy['models']['deep'] = ['gpt-6-astra', 'gpt-6-sol']
+        next(model for model in cat if model['model'] == 'gpt-6-astra')['efforts'] = ['low']
+        plan = r.decide(self.umr, cat, policy)
+        self.assertEqual((plan['model'], plan['effort']), ('gpt-6-sol', 'xhigh'))
+
+    def test_safety_floor_can_raise_overridden_manual_effort_to_xhigh(self):
+        cat = copy.deepcopy(self.catalog)
+        next(model for model in cat if model['model'] == 'gpt-6-astra')['efforts'] = ['xhigh']
+        plan = r.decide(self.umr, cat, self.p, effort_preference='low')
+        self.assertEqual(plan['effort'], 'xhigh')
+        self.assertTrue(any('Sicherheitsregel erzwingt' in reason for reason in plan['reasons']))
+
+    def test_automatic_model_respects_explicit_supported_effort(self):
+        cat = copy.deepcopy(self.catalog)
+        cat[0]['efforts'] = ['low', 'medium']
+        plan = r.decide(self.simple, cat, self.p, effort_preference='high')
+        self.assertEqual((plan['model'], plan['effort']), ('gpt-6-sol', 'high'))
+
     def test_max_effort_is_only_used_when_explicit_and_supported(self):
         cat = copy.deepcopy(self.catalog)
         cat[0]['efforts'].append('max')
@@ -147,6 +195,35 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(p['model'], 'gpt-6-sol')
         self.assertEqual(p['requested_tier'], 'fast')
 
+    def test_single_live_balanced_model_supports_normal_tasks_but_not_deep_floor(self):
+        raw = {'data': [{'model': 'gpt-5.5', 'hidden': False,
+                         'supportedReasoningEfforts': [{'reasoningEffort': x}
+                                                       for x in ('low', 'medium', 'high', 'xhigh')],
+                         'defaultReasoningEffort': 'medium'}]}
+        cat = r.normalize_catalog(raw)
+        self.assertEqual(r.decide(self.simple, cat, self.p)['model'], 'gpt-5.5')
+        with self.assertRaisesRegex(r.RouterError, 'deep'):
+            r.decide(self.umr, cat, self.p)
+
+    def test_classifier_uses_fast_policy_fallback_before_deep(self):
+        cat = [model for model in self.catalog if model['model'] != 'gpt-6-sol']
+        cat.append({'model': 'gpt-5.5', 'efforts': ['low', 'medium'],
+                    'default_effort': 'medium', 'modalities': ['text', 'image']})
+        model, effort, note = r.choose_classifier_model(cat, self.p, False)
+        self.assertEqual((model['model'], effort), ('gpt-6-luna', 'low'))
+        self.assertIn('nicht verfügbar', note)
+
+    def test_classifier_uses_balanced_remainder_when_fast_is_absent(self):
+        cat = [{'model': 'gpt-5.5', 'efforts': ['low', 'medium'],
+                'default_effort': 'medium', 'modalities': ['text', 'image']}]
+        model, effort, note = r.choose_classifier_model(cat, self.p, False)
+        self.assertEqual((model['model'], effort), ('gpt-5.5', 'low'))
+        self.assertIn('nicht verfügbar', note)
+
+    def test_classifier_fails_without_supported_live_model(self):
+        with self.assertRaisesRegex(r.RouterError, 'Einstufung'):
+            r.choose_classifier_model([], self.p, False)
+
     def test_missing_deep_never_silently_downgrades(self):
         cat = [x for x in self.catalog if x['model'] != 'gpt-6-astra']
         with self.assertRaises(r.RouterError): r.decide(self.umr, cat, self.p)
@@ -166,10 +243,13 @@ class PolicyTests(unittest.TestCase):
         for x in cat: x['modalities'] = ['text']
         with self.assertRaises(r.RouterError): r.decide(self.simple, cat, self.p, attached_images=True)
 
-    def test_unknown_modalities_use_documented_backward_compatibility(self):
+    def test_unknown_modalities_do_not_imply_image_support(self):
         raw = copy.deepcopy(self.raw)
         for x in raw['data']: del x['inputModalities']
-        self.assertIn('image', r.normalize_catalog(raw)[0]['modalities'])
+        cat = r.normalize_catalog(raw)
+        self.assertNotIn('image', cat[0]['modalities'])
+        with self.assertRaisesRegex(r.RouterError, 'Bildeingabe'):
+            r.decide(self.simple, cat, self.p, attached_images=True)
 
     def test_missing_xhigh_uses_confirmed_high(self):
         cat = copy.deepcopy(self.catalog)
@@ -216,6 +296,13 @@ class PolicyTests(unittest.TestCase):
             r.write_json(p,bad)
             with self.assertRaises(r.RouterError):r.load_policy(p)
 
+    def test_renamed_text_file_is_not_an_image(self):
+        with tempfile.TemporaryDirectory() as td:
+            image = Path(td) / 'fake.png'
+            image.write_text('not an image')
+            with self.assertRaisesRegex(r.RouterError, 'PNG-/JPEG-/WebP-Header'):
+                r.validate_image(image)
+
 
 class LaunchTests(unittest.TestCase):
     def setUp(self):
@@ -234,6 +321,8 @@ class LaunchTests(unittest.TestCase):
     def test_analysis_stays_readonly_even_with_write_flag(self):
         cmd = r.main_command(['codex'], self.simple, Path('/project'), Path('/logs'), Path('/logs/a.md'), [], True)
         self.assertEqual(cmd[cmd.index('--sandbox')+1], 'read-only')
+        self.assertEqual(cmd[cmd.index('--ask-for-approval')+1], 'never')
+        self.assertIn('--ignore-user-config', cmd)
 
     def test_implementation_has_scoped_writes_and_approvals(self):
         cmd = r.main_command(['codex'], self.umr, Path('/project'), Path('/logs'), Path('/logs/a.md'), [], True)
@@ -357,6 +446,8 @@ for line in sys.stdin:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             project = root / 'project'; project.mkdir()
+            home = root / 'codex-home'; home.mkdir()
+            (home / 'auth.json').write_text('{"fixture": true}', encoding='utf-8')
             output = root / 'run'
             assessment = root / 'assessment.json'
             assessment.write_text((ROOT / 'examples/message.json').read_text(), encoding='utf-8')
@@ -364,15 +455,58 @@ for line in sys.stdin:
                     '--project', str(project), '--assessment-file', str(assessment),
                     '--profile', 'balanced', '--effort', 'high', '--out', str(output)]
             with mock.patch.object(sys, 'argv', argv), \
+                 mock.patch.dict(os.environ, {'CODEX_HOME': str(home)}), \
                  mock.patch.object(r, 'resolve_codex', return_value=['codex']), \
                  mock.patch.object(r, 'discover_models', return_value=r.load_json(ROOT / 'examples/models.fixture.json')), \
                  mock.patch.object(r, 'assess') as classifier, \
                  mock.patch.object(subprocess, 'call', return_value=0):
                 code = r.cli()
+                self.assertEqual(r.discover_models.call_count, 2)
             self.assertEqual(code, 0)
             classifier.assert_not_called()
             plan = r.load_json(output / 'plan.json')
             self.assertEqual((plan['requested_tier'], plan['effort']), ('balanced', 'high'))
+
+    def test_catalog_change_before_start_aborts_without_launch(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            project = root / 'project'; project.mkdir()
+            home = root / 'codex-home'; home.mkdir()
+            (home / 'auth.json').write_text('{"fixture": true}', encoding='utf-8')
+            assessment = root / 'assessment.json'
+            assessment.write_text((ROOT / 'examples/message.json').read_text(), encoding='utf-8')
+            first = r.load_json(ROOT / 'examples/models.fixture.json')
+            second = copy.deepcopy(first)
+            second['data'] = [item for item in second['data'] if item['model'] != 'gpt-6-luna']
+            argv = [str(ROOT / 'router.py'), 'run', '--task', 'Nur prüfen',
+                    '--project', str(project), '--assessment-file', str(assessment),
+                    '--out', str(root / 'run')]
+            with mock.patch.object(sys, 'argv', argv), \
+                 mock.patch.dict(os.environ, {'CODEX_HOME': str(home)}), \
+                 mock.patch.object(r, 'resolve_codex', return_value=['codex']), \
+                 mock.patch.object(r, 'discover_models', side_effect=[first, second]), \
+                 mock.patch.object(subprocess, 'call') as launch:
+                with self.assertRaisesRegex(r.RouterError, 'Neue Alternative'):
+                    r.cli()
+                launch.assert_not_called()
+
+    def test_external_auth_change_before_start_aborts_without_launch(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            project = root / 'project'; project.mkdir()
+            assessment = root / 'assessment.json'
+            assessment.write_text((ROOT / 'examples/message.json').read_text(), encoding='utf-8')
+            argv = [str(ROOT / 'router.py'), 'run', '--task', 'Nur prüfen',
+                    '--project', str(project), '--assessment-file', str(assessment),
+                    '--out', str(root / 'run')]
+            with mock.patch.object(sys, 'argv', argv), \
+                 mock.patch.object(r, 'credential_fingerprint', side_effect=['before', 'after']), \
+                 mock.patch.object(r, 'resolve_codex', return_value=['codex']), \
+                 mock.patch.object(r, 'discover_models', return_value=r.load_json(ROOT / 'examples/models.fixture.json')), \
+                 mock.patch.object(subprocess, 'call') as launch:
+                with self.assertRaisesRegex(r.RouterError, 'auth.json hat sich'):
+                    r.cli()
+                launch.assert_not_called()
 
 
 if __name__=='__main__':
