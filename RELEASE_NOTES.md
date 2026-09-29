@@ -12,7 +12,7 @@ Lokaler Buildkandidat, **nicht hochgeladen oder installiert**:
 - Automatische Prüfungen: 94 .NET-Tests, 72 Python-Tests, Syntax/JSON/XML/Version/Payload sowie Release-Build und Inno-Kompilierung bestanden. NuGet-Auditdaten waren aus der Sandbox nicht erreichbar (`NU1900`); der erforderliche Runtime-Restore gelang gezielt.
 - Voraussetzungen für den Router: Windows, Python 3.10+, aktuelle angemeldete Codex-CLI, Auto-Swap aus. Modellangebote hängen vom aktiven Konto ab.
 
-**Offen:** Windows-UI-Abnahme bei verschiedenen DPI-Werten, separates Testkonto/Wegwerfprojekt, Clean-Install, Upgrade von v1.5.5, Deinstallation/Neuinstallation, GitHub-PR/CI, Issue #6 und Upload zum bestehenden Release-Entwurf. Details und Unsicherheiten: [Windows-Abnahme](docs/WINDOWS_ACCEPTANCE_V1_6.md). Dieser Kandidat darf nicht veröffentlicht werden.
+**Offen:** Windows-UI-Abnahme bei verschiedenen DPI-Werten, separates Testkonto/Wegwerfprojekt, Clean-Install, Upgrade von v1.5.5, Deinstallation/Neuinstallation, CI und Review von [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7), Issue #6 und Upload zum bestehenden Release-Entwurf. Details und Unsicherheiten: [Windows-Abnahme](docs/WINDOWS_ACCEPTANCE_V1_6.md). Dieser Kandidat darf nicht veröffentlicht werden.
 
 # v1.5.5
 

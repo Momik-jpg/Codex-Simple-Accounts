@@ -31,6 +31,6 @@ Stand: 29. September 2026. Diese Datei ist ein lokales Prüfprotokoll; die Check
 - Echte Einstufung, Start, schreibgeschützter und ausdrücklich freigegebener Schreibmodus mit separatem Testkonto und Wegwerfprojekt.
 - Login, Logout, Re-Login, Auto-Swap und Kontowechsel an einer ungefährlichen Testanmeldung; keine Beschädigung von Desktop-Chats oder Kontospeicher.
 - Clean-Install, Upgrade von v1.5.5, Deinstallation und Neuinstallation. Installation auf dem produktiven Benutzerprofil wäre ohne Testumgebung nicht verantwortbar.
-- GitHub-Issue #6 aktualisieren, PR-CI prüfen, Merge und Release-Entwurf mit finalem Installer füllen. Die lokale GitHub-CLI-Anmeldung meldet derzeit ein ungültiges Token.
+- [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7) wurde als Entwurf erstellt. Seine [CI](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/runs/36541430452) ist noch zu prüfen. GitHub-Issue #6 aktualisieren, Merge und Release-Entwurf mit finalem Installer füllen. Die lokale GitHub-CLI-Anmeldung meldet ein ungültiges Token; der PR wurde über die bereits funktionierende Git-Anmeldung erstellt.
 
 Bis diese Punkte wirklich geprüft und dokumentiert sind, ist v1.6.0 **nicht veröffentlichungsbereit**. Der bestehende Release-Entwurf bleibt unveröffentlicht.
