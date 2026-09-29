@@ -197,6 +197,7 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
             gateAcquired = true;
             try
             {
+                RefreshActiveAccountFromDisk();
                 if (_desktop.IsRunning && ActiveAccount == accountNumber)
                 {
                     return;
@@ -234,12 +235,16 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
 
     public void SynchronizeActiveAccount()
     {
-        int? detected = _store.FindByAuthFile(Path.Combine(ActiveCodexHome, "auth.json"));
-        if (ActiveAccount == detected && LastAccount == detected)
-            return;
-        ActiveAccount = detected;
-        LastAccount = detected;
-        ProcessExited?.Invoke(this, EventArgs.Empty);
+        if (!_gate.Wait(0)) return;
+        try
+        {
+            if (RefreshActiveAccountFromDisk())
+                ProcessExited?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     public async Task EmergencyStopAsync(CancellationToken cancellationToken)
@@ -264,6 +269,7 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
     public async Task LogoutAsync(int accountNumber, CancellationToken cancellationToken)
     {
         using IDisposable? accountChange = _taskRouterActivity?.BeginAccountChange();
+        SynchronizeActiveAccount();
         bool removeActiveAuth = ActiveAccount == accountNumber;
         if (removeActiveAuth || PendingAccount == accountNumber)
         {
@@ -291,12 +297,13 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
         if (removeActiveAuth)
         {
             string authFile = Path.Combine(ActiveCodexHome, "auth.json");
-            if (File.Exists(authFile))
+            if (File.Exists(authFile) && _store.FindByAuthFile(authFile) == accountNumber)
             {
                 File.Delete(authFile);
             }
         }
         _store.Remove(accountNumber);
+        SynchronizeActiveAccount();
         ProcessExited?.Invoke(this, EventArgs.Empty);
     }
 
@@ -311,6 +318,7 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
     {
         Directory.CreateDirectory(ActiveCodexHome);
         string authFile = Path.Combine(ActiveCodexHome, "auth.json");
+        RefreshActiveAccountFromDisk();
         int? previousAccount = ActiveAccount;
         byte[]? previousCredential = File.Exists(authFile)
             ? await File.ReadAllBytesAsync(authFile, cancellationToken)
@@ -396,5 +404,15 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
         {
             CryptographicOperations.ZeroMemory(credential);
         }
+    }
+
+    private bool RefreshActiveAccountFromDisk()
+    {
+        int? detected = _store.FindByAuthFile(Path.Combine(ActiveCodexHome, "auth.json"));
+        if (ActiveAccount == detected && LastAccount == detected)
+            return false;
+        ActiveAccount = detected;
+        LastAccount = detected;
+        return true;
     }
 }

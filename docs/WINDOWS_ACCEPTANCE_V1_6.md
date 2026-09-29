@@ -19,9 +19,9 @@ Stand: 29. September 2026. Diese Datei ist ein lokales Prüfprotokoll; die Check
 ## Automatisch lokal geprüft
 
 - `model/list` lieferte für die aktive CLI-Anmeldung nur `gpt-5.5` mit `low`, `medium`, `high`, `xhigh`. Kein Modell wurde aus der Präferenzliste als verfügbar vorausgesetzt.
-- 95 .NET-Tests und 75 Python-Tests bestanden. Diese simulieren kritische Router-, Start-, Konto- und Fehlerpfade sowie Planvalidierung, ersetzen aber keine echte Anmeldung oder Desktop-Abnahme.
+- 102 .NET-Tests und 75 Python-Tests bestanden. Diese simulieren kritische Router-, Start-, Konto- und Fehlerpfade sowie Planvalidierung. Neue Regressionstests prüfen externe Wechsel von `auth.json` vor und während eines Kontowechsels, beim Abmelden und während der Limitabfrage; auch eine legitime Token-Erneuerung desselben Kontos bleibt möglich. Das ersetzt keine echte Anmeldung oder Desktop-Abnahme.
 - Release-Build und Inno-Installer wurden lokal kompiliert; Produkt-/Dateiversion `1.6.0`. Der Installer wurde **nicht** ausgeführt.
-- Lokaler Installationskandidat `Codex-Konten-Installer.exe`: `34'543'001` Bytes, SHA-256 `FC68D7D1A9E1B3888CCF2F05B2A027CFF3BB5F7EC7E686F5335026252EB4EBEE`. Der Hash ist noch nicht mit einem hochgeladenen Release-Asset verglichen.
+- Lokaler Installationskandidat `Codex-Konten-Installer.exe`: `34'544'125` Bytes, SHA-256 `DB7AE0111A43B58A9E4624D035F1DC8E9F03A27F07AC53DE8BAB3EF6D5D100CC`. Der Hash ist noch nicht mit einem hochgeladenen Release-Asset verglichen.
 - Der Build kopierte Projekt-MIT-Lizenz, .NET-Runtime-Lizenz, deren Drittanbieterhinweise und WindowsDesktop-Lizenz versionsgenau und unverändert in die Publish-Ausgabe. Das Inno-Buildprotokoll bestätigt alle fünf Dateien im Installer und die Lizenzseite; der Installer selbst wurde nicht installiert.
 - `Get-AuthenticodeSignature` meldete `NotSigned`; eine Windows-Herausgeber-/SmartScreen-Warnung ist möglich und wird nicht automatisch umgangen.
 - Python-Syntax, Router-JSON, Projekt-XML, Versionsabgleich und Publish-Payload wurden lokal geprüft.

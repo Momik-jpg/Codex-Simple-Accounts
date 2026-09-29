@@ -270,6 +270,153 @@ public sealed class SmoothCodexProcessManagerTests
         }
     }
 
+    [Fact]
+    public async Task StartAsync_ExternalAccountChangeDoesNotOverwriteStoredCredential()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"SmoothExternalSwitch-{Guid.NewGuid():N}");
+        var store = new AccountStore(new AppPaths(Path.Combine(root, "tray")));
+        byte[] first = Auth(1);
+        byte[] second = Auth(2);
+        store.Save(1, first);
+        store.Save(2, second);
+        string codexHome = Path.Combine(root, ".codex");
+        Directory.CreateDirectory(codexHome);
+        string authFile = Path.Combine(codexHome, "auth.json");
+        File.WriteAllBytes(authFile, first);
+        var desktop = new FakeDesktopRuntime { IsRunning = true };
+        var manager = new SmoothCodexProcessManager(store,
+            new CodexCommand("dotnet", [typeof(FakeCodex.Marker).Assembly.Location]),
+            codexHome, desktop);
+        try
+        {
+            File.WriteAllBytes(authFile, second);
+
+            await manager.StartAsync(1, false, CancellationToken.None);
+
+            Assert.Equal(first, store.Load(1));
+            Assert.Equal(second, store.Load(2));
+            Assert.Equal(first, File.ReadAllBytes(authFile));
+            Assert.Equal(1, desktop.CloseCount);
+            Assert.Equal(1, desktop.LaunchCount);
+            Assert.Equal(1, manager.ActiveAccount);
+        }
+        finally
+        {
+            manager.Dispose();
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task LogoutAsync_ExternalAccountChangeKeepsCurrentCodexLogin()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"SmoothExternalLogout-{Guid.NewGuid():N}");
+        var store = new AccountStore(new AppPaths(Path.Combine(root, "tray")));
+        byte[] first = Auth(1);
+        byte[] second = Auth(2);
+        store.Save(1, first);
+        store.Save(2, second);
+        string codexHome = Path.Combine(root, ".codex");
+        Directory.CreateDirectory(codexHome);
+        string authFile = Path.Combine(codexHome, "auth.json");
+        File.WriteAllBytes(authFile, first);
+        var desktop = new FakeDesktopRuntime { IsRunning = true };
+        var manager = new SmoothCodexProcessManager(store,
+            new CodexCommand("dotnet", [typeof(FakeCodex.Marker).Assembly.Location]),
+            codexHome, desktop);
+        try
+        {
+            File.WriteAllBytes(authFile, second);
+
+            await manager.LogoutAsync(1, CancellationToken.None);
+
+            Assert.False(store.IsLoggedIn(1));
+            Assert.True(store.IsLoggedIn(2));
+            Assert.Equal(second, File.ReadAllBytes(authFile));
+            Assert.Equal(0, desktop.CloseCount);
+            Assert.True(desktop.IsRunning);
+            Assert.Equal(2, manager.ActiveAccount);
+        }
+        finally
+        {
+            manager.Dispose();
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_AccountChangeWhileClosingDoesNotCorruptPreviousSlot()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"SmoothCloseRace-{Guid.NewGuid():N}");
+        var store = new AccountStore(new AppPaths(Path.Combine(root, "tray")));
+        byte[] first = Auth(1);
+        byte[] second = Auth(2);
+        store.Save(1, first);
+        store.Save(2, second);
+        string codexHome = Path.Combine(root, ".codex");
+        Directory.CreateDirectory(codexHome);
+        string authFile = Path.Combine(codexHome, "auth.json");
+        File.WriteAllBytes(authFile, first);
+        var desktop = new FakeDesktopRuntime
+        {
+            IsRunning = true,
+            OnClose = () => File.WriteAllBytes(authFile, second)
+        };
+        var manager = new SmoothCodexProcessManager(store,
+            new CodexCommand("dotnet", [typeof(FakeCodex.Marker).Assembly.Location]),
+            codexHome, desktop);
+        try
+        {
+            await manager.StartAsync(1, false, CancellationToken.None);
+
+            Assert.Equal(first, store.Load(1));
+            Assert.Equal(second, store.Load(2));
+            Assert.Equal(first, File.ReadAllBytes(authFile));
+        }
+        finally
+        {
+            manager.Dispose();
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task LogoutAsync_AccountChangeWhileClosingDoesNotDeleteOtherLogin()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"SmoothLogoutRace-{Guid.NewGuid():N}");
+        var store = new AccountStore(new AppPaths(Path.Combine(root, "tray")));
+        byte[] first = Auth(1);
+        byte[] second = Auth(2);
+        store.Save(1, first);
+        store.Save(2, second);
+        string codexHome = Path.Combine(root, ".codex");
+        Directory.CreateDirectory(codexHome);
+        string authFile = Path.Combine(codexHome, "auth.json");
+        File.WriteAllBytes(authFile, first);
+        var desktop = new FakeDesktopRuntime
+        {
+            IsRunning = true,
+            OnClose = () => File.WriteAllBytes(authFile, second)
+        };
+        var manager = new SmoothCodexProcessManager(store,
+            new CodexCommand("dotnet", [typeof(FakeCodex.Marker).Assembly.Location]),
+            codexHome, desktop);
+        try
+        {
+            await manager.LogoutAsync(1, CancellationToken.None);
+
+            Assert.False(store.IsLoggedIn(1));
+            Assert.True(store.IsLoggedIn(2));
+            Assert.Equal(second, File.ReadAllBytes(authFile));
+            Assert.Equal(2, manager.ActiveAccount);
+        }
+        finally
+        {
+            manager.Dispose();
+            Directory.Delete(root, true);
+        }
+    }
+
     private static byte[] Auth(int account) => JsonSerializer.SerializeToUtf8Bytes(new
     {
         tokens = new { account_id = $"account-{account}", id_token = "a.e30." }
@@ -279,6 +426,7 @@ public sealed class SmoothCodexProcessManagerTests
     {
         public bool IsRunning { get; set; }
         public bool ThrowOnLaunch { get; set; }
+        public Action? OnClose { get; set; }
         public int CloseCount { get; private set; }
         public int LaunchCount { get; private set; }
         public Uri? ProxyUri { get; private set; }
@@ -287,6 +435,7 @@ public sealed class SmoothCodexProcessManagerTests
         {
             CloseCount++;
             IsRunning = false;
+            OnClose?.Invoke();
             return Task.CompletedTask;
         }
         public void Launch()

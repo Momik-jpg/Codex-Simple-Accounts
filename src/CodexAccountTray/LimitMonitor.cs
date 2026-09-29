@@ -133,11 +133,10 @@ public sealed class LimitMonitor : IDisposable
             AccountLimits limits = await _protocol.ReadLimitsAsync(
                 _processManager.ActiveCodexHome,
                 cancellationToken);
+            if (_processManager.IsRunning || _processManager.ActiveAccount != account)
+                throw new InvalidOperationException("Das aktive Konto hat sich während der Limitprüfung geändert.");
             string activeAuth = Path.Combine(_processManager.ActiveCodexHome, "auth.json");
-            if (File.Exists(activeAuth))
-            {
-                _store.Save(account, await File.ReadAllBytesAsync(activeAuth, cancellationToken));
-            }
+            await RefreshStoredCredentialAsync(account, activeAuth, cancellationToken);
             return limits;
         }
 
@@ -156,10 +155,7 @@ public sealed class LimitMonitor : IDisposable
         try
         {
             AccountLimits limits = await _protocol.ReadLimitsAsync(probeHome, cancellationToken);
-            if (File.Exists(authFile))
-            {
-                _store.Save(account, await File.ReadAllBytesAsync(authFile, cancellationToken));
-            }
+            await RefreshStoredCredentialAsync(account, authFile, cancellationToken);
             return limits;
         }
         finally
@@ -168,6 +164,33 @@ public sealed class LimitMonitor : IDisposable
             {
                 File.Delete(authFile);
             }
+        }
+    }
+
+    private async Task RefreshStoredCredentialAsync(int account, string authFile, CancellationToken cancellationToken)
+    {
+        byte[] refreshed = await File.ReadAllBytesAsync(authFile, cancellationToken);
+        try
+        {
+            byte[] stored = _store.Load(account);
+            try
+            {
+                if (stored.AsSpan().SequenceEqual(refreshed)) return;
+                string? expectedId = AccountProfileReader.ReadAccountId(stored);
+                string? refreshedId = AccountProfileReader.ReadAccountId(refreshed);
+                if (string.IsNullOrWhiteSpace(expectedId) ||
+                    !string.Equals(expectedId, refreshedId, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Die Kontoidentität hat sich während der Limitprüfung geändert.");
+                _store.Save(account, refreshed);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(stored);
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(refreshed);
         }
     }
 
