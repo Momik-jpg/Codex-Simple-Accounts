@@ -13,7 +13,7 @@ Lokaler Buildkandidat, **nicht hochgeladen oder installiert**:
 - Voraussetzungen für den Router: Windows, Python 3.10+, aktuelle angemeldete Codex-CLI, Auto-Swap aus. Modellangebote hängen vom aktiven Konto ab.
 - Bekannte Einschränkung: Der lokale Installer ist nicht code-signiert. Windows kann deshalb eine Herausgeber-/SmartScreen-Warnung anzeigen; eine solche Warnung darf im Abnahmetest nicht automatisiert umgangen werden.
 
-**Offen:** Windows-UI-Abnahme bei verschiedenen DPI-Werten einschliesslich Animation aus, separates Testkonto/Wegwerfprojekt, Clean-Install, Upgrade von v1.5.5, Deinstallation/Neuinstallation, Review und Merge von [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7), Abschluss von Issue #6 und Upload zum bestehenden Release-Entwurf. Ein früherer PR-CI-Lauf war grün; die neue Änderung benötigt noch ihren eigenen CI-Lauf. Details und Unsicherheiten: [Windows-Abnahme](docs/WINDOWS_ACCEPTANCE_V1_6.md). Dieser Kandidat darf nicht veröffentlicht werden.
+**Offen:** Windows-UI-Abnahme bei verschiedenen DPI-Werten einschliesslich Animation aus, separates Testkonto/Wegwerfprojekt, Clean-Install, Upgrade von v1.5.5, Deinstallation/Neuinstallation, Review und Merge von [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7), Abschluss von Issue #6 und Upload zum bestehenden Release-Entwurf. Die [PR-CI für den neuen Codecommit](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/runs/36547963005) ist grün. Details und Unsicherheiten: [Windows-Abnahme](docs/WINDOWS_ACCEPTANCE_V1_6.md). Dieser Kandidat darf nicht veröffentlicht werden.
 
 # v1.5.5
 
