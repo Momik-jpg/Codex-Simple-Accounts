@@ -22,6 +22,7 @@ Stand: 29. September 2026. Diese Datei ist ein lokales Prüfprotokoll; die Check
 - 94 .NET-Tests und 72 Python-Tests bestanden. Diese simulieren kritische Router-, Start-, Konto- und Fehlerpfade, ersetzen aber keine echte Anmeldung oder Desktop-Abnahme.
 - Release-Build und Inno-Installer wurden lokal kompiliert; Produkt-/Dateiversion `1.6.0`. Der Installer wurde **nicht** ausgeführt.
 - Lokaler Installationskandidat `Codex-Konten-Installer.exe`: `34'535'920` Bytes, SHA-256 `0F1EAAF473B200D67D87487D1105FB86B5415C7C54141D24A08F0CBE61449218`. Der Hash ist noch nicht mit einem hochgeladenen Release-Asset verglichen.
+- `Get-AuthenticodeSignature` meldete `NotSigned`; eine Windows-Herausgeber-/SmartScreen-Warnung ist möglich und wird nicht automatisch umgangen.
 - Python-Syntax, Router-JSON, Projekt-XML, Versionsabgleich und Publish-Payload wurden lokal geprüft.
 - Quelltextsuche ergab keinen neuen Listener für Port `47831`; bei der Stichprobe war auf diesem Port kein lokaler TCP-Listener sichtbar. Der bestehende `CodexBackend` kann einen kurzlebigen freien Loopback-Port verwenden.
 

@@ -11,6 +11,7 @@ Lokaler Buildkandidat, **nicht hochgeladen oder installiert**:
 - SHA-256: `0F1EAAF473B200D67D87487D1105FB86B5415C7C54141D24A08F0CBE61449218`
 - Automatische Prüfungen: 94 .NET-Tests, 72 Python-Tests, Syntax/JSON/XML/Version/Payload sowie Release-Build und Inno-Kompilierung bestanden. NuGet-Auditdaten waren aus der Sandbox nicht erreichbar (`NU1900`); der erforderliche Runtime-Restore gelang gezielt.
 - Voraussetzungen für den Router: Windows, Python 3.10+, aktuelle angemeldete Codex-CLI, Auto-Swap aus. Modellangebote hängen vom aktiven Konto ab.
+- Bekannte Einschränkung: Der lokale Installer ist nicht code-signiert. Windows kann deshalb eine Herausgeber-/SmartScreen-Warnung anzeigen; eine solche Warnung darf im Abnahmetest nicht automatisiert umgangen werden.
 
 **Offen:** Windows-UI-Abnahme bei verschiedenen DPI-Werten, separates Testkonto/Wegwerfprojekt, Clean-Install, Upgrade von v1.5.5, Deinstallation/Neuinstallation, Review und Merge von [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7), Abschluss von Issue #6 und Upload zum bestehenden Release-Entwurf. Die PR-CI für den geprüften Code war grün. Details und Unsicherheiten: [Windows-Abnahme](docs/WINDOWS_ACCEPTANCE_V1_6.md). Dieser Kandidat darf nicht veröffentlicht werden.
 
