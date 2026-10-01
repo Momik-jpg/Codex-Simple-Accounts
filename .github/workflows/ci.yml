@@ -54,6 +54,12 @@ jobs:
           if (Test-Path 'artifacts/router-smoke/TaskRouter/tests') { throw 'Test fixtures must not ship in the installer' }
           python artifacts/router-smoke/TaskRouter/router.py --help
           python artifacts/router-smoke/TaskRouter/router.py demo umr
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Exercise the shipped MCP entry point, not just its source-tree import.
+          $ping = '{"jsonrpc":"2.0","id":7,"method":"ping"}' | python artifacts/router-smoke/TaskRouter/mcp_server.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $reply = $ping | ConvertFrom-Json
+          if ($reply.id -ne 7 -or $reply.jsonrpc -ne '2.0' -or $null -eq $reply.result -or $null -ne $reply.error) { throw 'Published MCP ping failed' }
       - name: Unsigned publish smoke artifact (not an installer)
         uses: actions/upload-artifact@v7
         with:
