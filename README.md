@@ -101,3 +101,7 @@ behauptet; vor Veröffentlichung ist diese Frage unabhängig zu prüfen.
 
 MIT – siehe [LICENSE](LICENSE). Hinweise zu mitgelieferten .NET-Komponenten,
 externen Werkzeugen und Drittanbietern stehen unter [Lizenz- und Drittanbieterhinweise](docs/THIRD_PARTY_LICENSES.md).
+
+### Kontenansicht: Dunkel und Hell
+
+Die Kontenansicht bietet ein gespeichertes schwarzes oder weisses Theme, klare Kontenzeilen und Balken für **verbleibende** 5-Stunden- und Wochenkontingente. Fehlende Daten bleiben als „Keine Daten“ sichtbar; veraltete Werte sind gekennzeichnet. Anmelden und Abmelden stehen im Drei-Punkte-Menü. Der automatische Wechsel verwendet weiterhin die echten Schwellen (5 Stunden höchstens 1 % frei, Woche 0 % frei) und wartet auf das Schliessen. Aufgaben werden über `gg` / `$gg` im Codex-Chat ausgeführt; die Kontenansicht enthält keinen Aufgabenstarter.
