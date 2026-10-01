@@ -20,7 +20,8 @@ public sealed class TaskRouterFormStateTests
                     () => Path.GetTempPath(), new TaskRouterActivity(), () => null);
                 // Host the real dialog layout without showing TaskRouterForm itself:
                 // its Shown handler would start live model discovery.
-                using var host = new Form { ClientSize = form.ClientSize, Font = form.Font,
+                using var host = new Form { AutoScaleMode = AutoScaleMode.None, Font = form.Font,
+                    ClientSize = form.ClientSize, ForeColor = form.ForeColor,
                     BackColor = form.BackColor, Text = form.Text, ShowInTaskbar = false };
                 host.Controls.Add(form.Controls[0]);
                 host.Show();
@@ -30,6 +31,8 @@ public sealed class TaskRouterFormStateTests
                 var plan = Descendants(tabs.TabPages[0]).OfType<TextBox>().Single();
                 Assert.True(plan.ReadOnly);
                 plan.Text = TaskRouterLauncher.FormatWorkPlan("""{"status":"ready","goal":"Änderung sicher prüfen","plan_steps":[{"action":"Projekt untersuchen","verification":"Relevante Dateien bestätigen"},{"action":"Regression prüfen","verification":"Alle Tests bestehen"}]}""");
+                plan.SelectionStart = 0;
+                plan.SelectionLength = 0;
                 tabs.SelectedIndex = 0;
                 host.PerformLayout();
                 Assert.True(plan.Visible);
