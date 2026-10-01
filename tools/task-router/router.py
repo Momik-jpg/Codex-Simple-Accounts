@@ -278,9 +278,11 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
         tier = "deep"
         safety_floor = "deep"
         reasons.append("Qualitätsregel: anspruchsvolle Rekonstruktion/Analyse oder belegte methodische Stagnation.")
-    elif (a["confidence"] == "low" or s["failure_impact"] >= 2) and tier == "fast":
-        tier = "balanced"
+    elif a["confidence"] == "low" or s["failure_impact"] >= 2:
+        # The safety floor must survive manual overrides even when the score is higher.
         safety_floor = "balanced"
+        if tier == "fast":
+            tier = safety_floor
         reasons.append("Unsichere Einstufung oder Fehlerfolgen: kein Routineprofil.")
     if profile != "auto":
         selected = TIERS.index(profile)
