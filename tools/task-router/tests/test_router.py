@@ -35,6 +35,17 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(p['plan_steps'], self.simple['plan_steps'])
         self.assertTrue(p['provisional_until_project_inspection'])
 
+    def test_evaluation_explains_policy_points_and_safety_floor(self):
+        a = copy.deepcopy(self.simple)
+        a['confidence'] = 'low'
+        p = self.plan(a)
+        self.assertEqual(p['safety_floor'], 'balanced')
+        self.assertEqual(sum(item['points'] for item in p['evaluation']), p['score'])
+        for item in p['evaluation']:
+            self.assertEqual(item['score'], a['scores'][item['dimension']])
+            self.assertEqual(item['weight'], self.p['weights'][item['dimension']])
+            self.assertEqual(item['points'], item['score'] * item['weight'])
+
     def test_plan_steps_are_required_and_bounded(self):
         missing = copy.deepcopy(self.simple); del missing['plan_steps']
         with self.assertRaises(r.RouterError): self.plan(missing)
