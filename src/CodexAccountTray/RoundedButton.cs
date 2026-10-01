@@ -48,6 +48,10 @@ public sealed class RoundedButton : Button
         }
     }
 
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Color BorderColor { get; set; } = Color.Transparent;
+
     protected override void OnBackColorChanged(EventArgs eventArgs)
     {
         base.OnBackColorChanged(eventArgs);
@@ -63,12 +67,17 @@ public sealed class RoundedButton : Button
         Rectangle bounds = new(0, 0, Width - 1, Height - 1);
         using GraphicsPath path = CreateRoundedPath(bounds, CornerRadius);
         Color fill = !Enabled
-            ? Color.FromArgb(45, 48, 51)
+            ? Blend(_normalColor, Parent?.BackColor ?? BackColor, 0.65f)
             : _pressed
                 ? Blend(_normalColor, Color.Black, 0.18f)
                 : Blend(_normalColor, Color.White, _hoverProgress * 0.10f);
         using var brush = new SolidBrush(fill);
         eventArgs.Graphics.FillPath(brush, path);
+        if (BorderColor.A > 0)
+        {
+            using var borderPen = new Pen(BorderColor);
+            eventArgs.Graphics.DrawPath(borderPen, path);
+        }
         Rectangle textBounds = _pressed
             ? new Rectangle(bounds.X, bounds.Y + 1, bounds.Width, bounds.Height)
             : bounds;
@@ -77,7 +86,7 @@ public sealed class RoundedButton : Button
             Text,
             Font,
             textBounds,
-            Enabled ? ForeColor : Color.FromArgb(125, 130, 134),
+            Enabled ? ForeColor : Blend(ForeColor, Parent?.BackColor ?? BackColor, 0.55f),
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
 
         if (Focused && ShowFocusCues && Enabled)
