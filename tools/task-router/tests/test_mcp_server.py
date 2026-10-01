@@ -97,6 +97,17 @@ class InstallationTests(unittest.TestCase):
             with self.assertRaises(ValueError): m.install(project)
             self.assertFalse((project/'.agents/skills/gg').exists())
             self.assertEqual(config.read_text(encoding='utf-8'),'[broken')
+    @unittest.skipIf(sys.platform == 'win32', 'Windows symlinks may require elevated rights')
+    def test_symlink_config_cannot_change_external_settings(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d); project=root/'project'; project.mkdir()
+            external=root/'settings'; external.mkdir()
+            config=external/'config.toml'; config.write_text('model="keep"',encoding='utf-8')
+            (project/'.codex').symlink_to(external, target_is_directory=True)
+            with self.assertRaisesRegex(r.RouterError,'symbolische'):
+                m.install(project)
+            self.assertEqual(config.read_text(encoding='utf-8'),'model="keep"')
+            self.assertFalse((project/'.agents/skills/gg').exists())
     def test_write_failure_rolls_back(self):
         with tempfile.TemporaryDirectory() as d:
             project=Path(d)
