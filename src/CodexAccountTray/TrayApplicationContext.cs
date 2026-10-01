@@ -132,7 +132,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
             bool routerActive = _taskRouterActivity.IsActive;
             var autoTask = new ToolStripMenuItem(routerActive
                 ? "Auto-Aufgabe läuft · anzeigen"
-                : "Neue Auto-Aufgabe …")
+                : "Separater Aufgabenstarter …")
             {
                 Enabled = true,
                 ForeColor = routerActive ? Color.FromArgb(108, 201, 145) : Color.FromArgb(112, 170, 240),
@@ -146,7 +146,16 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
                 _managerForm.ShowWindow();
                 _openTaskRouter(_managerForm);
             };
-            _menu.Items.Add(autoTask);
+            if (routerActive)
+            {
+                _menu.Items.Add(autoTask);
+            }
+            else
+            {
+                var advanced = new ToolStripMenuItem("Erweitert");
+                advanced.DropDownItems.Add(autoTask);
+                _menu.Items.Add(advanced);
+            }
         }
         else if (_taskRouterActivity.IsActive)
         {
