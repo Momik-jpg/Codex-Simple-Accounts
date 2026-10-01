@@ -33,7 +33,10 @@ public sealed class AccountManagerThemeTests
                     store.Save(account, JsonSerializer.SerializeToUtf8Bytes(new { tokens = new { account_id = $"fixture-{account}" } }));
                 var settings = new AppSettingsStore(paths);
                 settings.Save(new AppSettings(root, true) { RouterProfile = "balanced", RouterEffort = "medium" });
-                var process = new FixtureProcess();
+                string activeHome = paths.LoginHome(1);
+                Directory.CreateDirectory(activeHome);
+                File.WriteAllBytes(Path.Combine(activeHome, "auth.json"), store.Load(1));
+                var process = new FixtureProcess(activeHome);
                 using var monitor = new LimitMonitor(paths, store, new FixtureProtocol(), process, TimeSpan.FromMinutes(9), () => false);
                 monitor.RefreshAsync(CancellationToken.None).GetAwaiter().GetResult();
                 using var form = new AccountManagerForm(store,
@@ -115,7 +118,7 @@ public sealed class AccountManagerThemeTests
         }
     }
 
-    private sealed class FixtureProcess : ICodexProcessManager
+    private sealed class FixtureProcess(string activeHome) : ICodexProcessManager
     {
         public bool Running;
         public int? Pending;
@@ -123,7 +126,7 @@ public sealed class AccountManagerThemeTests
         public int? ActiveAccount => 1;
         public int? PendingAccount => Pending;
         public int? LastAccount => 1;
-        public string ActiveCodexHome => string.Empty;
+        public string ActiveCodexHome => activeHome;
         public event EventHandler? ProcessExited { add { } remove { } }
         public Task StartAsync(int accountNumber, bool resumeLast, CancellationToken cancellationToken) => Task.CompletedTask;
     }
