@@ -210,6 +210,28 @@ public sealed class TaskRouterLauncherTests : IDisposable
     }
 
     [Fact]
+    public void PlanDistinguishesEvaluatorRecommendationAndActualSelection()
+    {
+        string report = TaskRouterLauncher.FormatPlan("""{"status":"ready","model":"fixture-model","effort":"medium","workload":"M","max_concurrent_subagents":0,"requested_tier":"deep","actual_tier":"balanced","safety_floor":"balanced","intake":{"model":"fixture-classifier","effort":"low"},"evaluation":[{"dimension":"reasoning","score":2,"weight":2,"points":4}]}""");
+        Assert.Contains("Bewertet durch: fixture-classifier / low", report);
+        Assert.Contains("Empfohlenes Qualitätsprofil:", report);
+        Assert.Contains("Ausgewähltes Modellprofil:", report);
+        Assert.Contains("Sicherheitsgrenze:", report);
+        Assert.Contains("reasoning: 2 × 2 = 4", report);
+        Assert.Contains("noch nicht nachgewiesen", report);
+        Assert.Contains("persönliche Benutzerkonfiguration wird nicht geladen", report);
+    }
+
+    [Fact]
+    public void WorkPlanShowsOpenStepsWithoutInventingLiveProgress()
+    {
+        string report = TaskRouterLauncher.FormatWorkPlan("""{"status":"ready","goal":"Ziel","plan_steps":[{"action":"Dateien prüfen","verification":"Befund dokumentieren"}]}""");
+        Assert.Contains("1. Offen · Dateien prüfen", report);
+        Assert.Contains("Erfolg prüfen: Befund dokumentieren", report);
+        Assert.Contains("beobachtet keine erledigten Arbeitsschritte", report);
+    }
+
+    [Fact]
     public void RequestedStartParametersAreVisibleWithoutClaimingActualExecution()
     {
         string summary = TaskRouterLauncher.FormatRequest(
