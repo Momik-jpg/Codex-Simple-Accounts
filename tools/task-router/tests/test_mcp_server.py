@@ -16,7 +16,7 @@ import mcp_server as m
 class BridgeTests(unittest.TestCase):
     def setUp(self):
         self.server = m.Server()
-        self.call('initialize', {'protocolVersion': m.PROTOCOL})
+        self.call('initialize', {'protocolVersion': m.PROTOCOL, 'capabilities': {}, 'clientInfo': {'name': 'test', 'version': '1'}})
         self.server.handle({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
     def call(self, method, params=None):
         return self.server.handle({'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params or {}})
@@ -57,6 +57,52 @@ class BridgeTests(unittest.TestCase):
             for args in ({'task':''},{'task':'t','codex':'evil'},{'task':'t','max_subagents':True},{'task':'t','max_subagents':3},{'task':'x'*30000,'chat_context':'x'*30000}):
                 with self.assertRaises(r.RouterError): m.evaluate(args)
             resolve.assert_not_called()
+    def test_invalid_id_is_not_reflected(self):
+        response=self.server.handle({'jsonrpc':'2.0','id':{'secret':'value'},'method':'ping'})
+        self.assertEqual(response['error']['code'],-32600)
+        self.assertIsNone(response['id'])
+        self.assertNotIn('secret',json.dumps(response))
+    def test_malformed_initialization_does_not_advance_session(self):
+        server=m.Server()
+        response=server.handle({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':m.PROTOCOL}})
+        self.assertEqual(response['error']['code'],-32602)
+        self.assertFalse(server.initialized)
+    def test_non_object_tool_arguments_are_protocol_error(self):
+        with mock.patch.object(m,'evaluate') as evaluate:
+            result=self.call('tools/call',{'name':'evaluate_task','arguments':[]})
+            self.assertEqual(result['error']['code'],-32602)
+            evaluate.assert_not_called()
+    def test_nonstandard_json_and_duplicate_keys_rejected(self):
+        for text in ('{"jsonrpc":"2.0","id":NaN,"method":"ping"}',
+                     '{"jsonrpc":"2.0","id":1,"method":"ping","method":"tools/call"}'):
+            out=io.StringIO(); m.serve(io.StringIO(text+'\n'),out)
+            self.assertEqual(json.loads(out.getvalue())['error']['code'],-32700)
+    def test_surrogate_id_does_not_break_utf8_transport(self):
+        out=io.StringIO()
+        m.serve(io.StringIO('{"jsonrpc":"2.0","id":"\\ud800","method":"ping"}\n'),out)
+        out.getvalue().encode('utf-8')
+        self.assertEqual(json.loads(out.getvalue())['result'],{})
+    def test_actionable_validation_error_without_input_leak(self):
+        result=self.call('tools/call',{'name':'evaluate_task','arguments':{'task':'SECRET','extra':'SECRET'}})['result']
+        self.assertTrue(result['isError'])
+        self.assertEqual(result['_meta']['error_code'],'INVALID_INPUT')
+        self.assertNotIn('SECRET',json.dumps(result))
+    def test_missing_authentication_has_safe_error_code(self):
+        with mock.patch.object(r,'credential_fingerprint',side_effect=r.RouterError('SECRET')):
+            result=self.call('tools/call',{'name':'evaluate_task','arguments':{'task':'t'}})['result']
+        self.assertEqual(result['_meta']['error_code'],'AUTH_UNAVAILABLE')
+        self.assertNotIn('SECRET',json.dumps(result))
+    def test_router_diagnostics_are_not_exposed_in_stderr_or_stdout(self):
+        def evaluate(*args):
+            print('SECRET')
+            print('SECRET',file=sys.stderr)
+            raise r.RouterError('SECRET')
+        out=io.StringIO(); err=io.StringIO()
+        with mock.patch.object(m,'evaluate',side_effect=evaluate), mock.patch('sys.stdout',out), mock.patch('sys.stderr',err):
+            result=self.call('tools/call',{'name':'evaluate_task','arguments':{'task':'t'}})
+        self.assertEqual(out.getvalue(),'')
+        self.assertEqual(err.getvalue(),'')
+        self.assertEqual(result['result']['_meta']['error_code'],'EVALUATION_FAILED')
     def evaluated(self, fingerprints):
         assessment=copy.deepcopy(r.load_json(ROOT/'examples/message.json'))
         assessment['confidence']='low'
@@ -108,6 +154,52 @@ class InstallationTests(unittest.TestCase):
                 m.install(project)
             self.assertEqual(config.read_text(encoding='utf-8'),'model="keep"')
             self.assertFalse((project/'.agents/skills/gg').exists())
+    def test_partial_skill_copy_is_cleaned_up(self):
+        def failing_copy(source,destination):
+            destination.mkdir()
+            (destination/'partial.txt').write_text('partial')
+            raise OSError('copy failed')
+        with tempfile.TemporaryDirectory() as d:
+            project=Path(d)
+            with mock.patch('shutil.copytree',side_effect=failing_copy):
+                with self.assertRaises(OSError): m.install(project)
+            self.assertFalse((project/'.agents/skills/gg').exists())
+            self.assertEqual(list((project/'.agents/skills').iterdir()),[])
+            self.assertFalse((project/'.codex/config.toml').exists())
+            self.assertFalse((project/'.codex/.simple-accounts-router-setup.lock').exists())
+    def test_setup_lock_refuses_parallel_installation(self):
+        with tempfile.TemporaryDirectory() as d:
+            project=Path(d); directory=project/'.codex'; directory.mkdir()
+            lock=directory/'.simple-accounts-router-setup.lock'; lock.write_text('other process')
+            with self.assertRaisesRegex(r.RouterError,'bereits aktiv'): m.install(project)
+            self.assertEqual(lock.read_text(),'other process')
+            self.assertFalse((project/'.agents/skills/gg').exists())
+    def test_existing_settings_changed_during_copy_are_preserved(self):
+        import shutil
+        copytree=shutil.copytree
+        with tempfile.TemporaryDirectory() as d:
+            project=Path(d); config=project/'.codex/config.toml'; config.parent.mkdir()
+            config.write_text('model="before"',encoding='utf-8')
+            def changing_copy(source,destination):
+                result=copytree(source,destination)
+                config.write_text('model="concurrent"',encoding='utf-8')
+                return result
+            with mock.patch('shutil.copytree',side_effect=changing_copy):
+                with self.assertRaisesRegex(r.RouterError,'gleichzeitig'): m.install(project)
+            self.assertEqual(config.read_text(encoding='utf-8'),'model="concurrent"')
+            self.assertFalse((project/'.agents/skills/gg').exists())
+    def test_scalar_mcp_servers_refused_cleanly(self):
+        with tempfile.TemporaryDirectory() as d:
+            project=Path(d); config=project/'.codex/config.toml'; config.parent.mkdir()
+            config.write_text('mcp_servers=2',encoding='utf-8')
+            with self.assertRaisesRegex(r.RouterError,'TOML-Tabelle'): m.install(project)
+            self.assertEqual(config.read_text(encoding='utf-8'),'mcp_servers=2')
+            self.assertFalse((project/'.agents/skills/gg').exists())
+    def test_windows_junction_detection(self):
+        path=Path('junction')
+        attributes=mock.Mock(st_file_attributes=0x400)
+        with mock.patch.object(Path,'lstat',return_value=attributes), mock.patch.object(Path,'is_symlink',return_value=False):
+            with self.assertRaisesRegex(r.RouterError,'Junctions'): m.reject_redirected_paths((path,))
     def test_write_failure_rolls_back(self):
         with tempfile.TemporaryDirectory() as d:
             project=Path(d)
