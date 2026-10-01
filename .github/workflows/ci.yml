@@ -23,6 +23,8 @@ jobs:
       - run: dotnet restore CodexAccountTray.sln
       - run: dotnet build CodexAccountTray.sln -c Release --no-restore
       - run: dotnet test CodexAccountTray.sln -c Release --no-restore --logger "trx;LogFileName=tests.trx"
+        env:
+          ROUTER_UI_ARTIFACTS: ${{ github.workspace }}/artifacts/router-ui
       - name: Validate Python syntax, JSON and project XML
         run: |
           python -m compileall -q tools/task-router tools/verify_metadata.py
@@ -63,5 +65,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-reports
-          path: '**/TestResults/*.trx'
+          path: |
+            **/TestResults/*.trx
+            artifacts/router-ui/*.png
           retention-days: 7
