@@ -85,3 +85,25 @@ Stand der Integrationsprüfung: 27. September 2026. Für die installierte Versio
 - [Subagents](https://developers.openai.com/codex/subagents)
 - [Strukturierte Ausgaben und unterstützte JSON-Schema-Felder](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [Windows-Einstellung für Clientbereich-Animationen](https://learn.microsoft.com/en-us/windows/win32/winauto/client-area-animation)
+
+## `gg`: App-Bewertung im bestehenden Codex-Chat (optional)
+
+Die optionale MCP-Brücke `TaskRouter/mcp_server.py` ruft **dieselben** Funktionen `assess()` und `decide()` wie der App-Starter auf. Der `gg`-Skill organisiert nur den Ablauf; er bewertet nicht selbst. Die App-GUI muss dafür nicht geöffnet sein. Codex CLI muss im PATH liegen und bereits angemeldet sein; Python 3.11 oder neuer ist für die Einrichtung erforderlich.
+
+Einmal ausdrücklich für ein Projekt einrichten (aus einer dauerhaft entpackten App):
+
+```powershell
+python "C:\Pfad\Codex-Simple-Accounts\TaskRouter\mcp_server.py" --install-project "C:\Pfad\Projekt"
+```
+
+Das kopiert ausschließlich `gg` nach `<Projekt>/.agents/skills/gg` und ergänzt `<Projekt>/.codex/config.toml` um `mcp_servers.simple_accounts_router`. Bestehende Einstellungen und andere MCP-Server bleiben erhalten; vorhandene gg-Installationen werden nicht überschrieben. Globale Konfiguration, Accounts und Plugins werden nicht geändert. Konfiguration und Skill können gemeinsam mit dem Projekt zurückgesetzt werden. Bei veränderter App-/Python-Position müssen die beiden Einrichtungsartefakte angepasst werden. Projekt in Codex vertrauen und die tatsächliche MCP-Verfügbarkeit prüfen. Zur Entfernung nur den Server-Eintrag und den gg-Skill entfernen.
+
+Danach Aufgabe im bestehenden Chat schreiben und **gg im Slash-Skill-Menü auswählen**, alternativ `$gg`. Verfügbarkeit des Slash-Menüs hängt vom Client ab; dies ist kein neu implementierter eingebauter Codex-Befehl. Der Chat übergibt Aufgabe und relevante akzeptierte Chat-Informationen ausdrücklich an `evaluate_task`. Kein automatischer Zugriff auf vollständige Chat-Historien oder Bilder; benötigte Bildbefunde und Projektinformationen müssen als geeigneter Kontext mitgegeben werden.
+
+Der laufende Chat bleibt der Hauptchat mit seinen vorhandenen Skills und Plugins. Angezeigt werden tatsächlicher Klassifizierer, Score/Confidence, Safety Floor, Auswahlgründe, vorgeschlagenes Hauptmodell und Arbeitsplan. Hauptmodell/Denkstufe werden **nicht im laufenden Chat umgeschaltet**. Bis zu zwei Unteragenten sind Vorschläge und starten erst durch echte, verfügbare Client-Funktionen. Fehlen geeignete Rollen, Modellwahl oder garantierte Leserechte, bleibt die Arbeit im Hauptchat. Ein unbekannter Tool-/Plugin-Status gilt nicht als erfolgreiche Verwendung. Ergebnisqualität wird anhand tatsächlicher Abnahmeprüfungen beurteilt, nicht allein anhand des Routing-Scores.
+
+MCP läuft lokal über stdin/stdout ohne HTTP-Port oder zusätzliche Python-Pakete. Die Klassifizierung ist ein begrenzter Codex-Aufruf und kann Kontingent verbrauchen. Sie verwendet die isolierte Eingangsprüfung der App, nicht die Plugins des Hauptchats. Das Ergebnis ist vorläufig bis zur Projektinspektion. Bei Fehlern gibt es keinen selbst erfundenen Ersatzplan. Konto-Wechsel zwischen Beginn und Ende verwerfen das Ergebnis; die externe Brücke besitzt keinen prozessübergreifenden Account-Sperrmechanismus. Deshalb während der Bewertung nicht parallel Accounts wechseln.
+
+**Ohne Laptop:** Python-Protokoll-, Policy- und Einrichtungstests sowie .NET-Tests und Windows-Publish laufen in GitHub Actions. Das prüft die Implementierung und verpackten Assets, aber nicht eine echte Anmeldung und Unterchat-Ausführung in deiner Codex-Installation. Ein lokaler stdio-Server auf einem ausgeschalteten Laptop ist vom mobilen/Cloud-Chat nicht erreichbar. Dafür wäre eine separat betriebene, authentifizierte Remote-MCP-Integration nötig; hier wird kein Server öffentlich freigegeben und keine mobile Aktivierung behauptet.
+
+Referenzen: [Codex MCP-Konfiguration](https://learn.chatgpt.com/docs/extend/mcp), [Skills im Slash-Menü](https://learn.chatgpt.com/docs/reference/slash-commands), [MCP stdio](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
