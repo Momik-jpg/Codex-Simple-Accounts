@@ -152,6 +152,9 @@ def install(project: Path) -> None:
         raise router.RouterError("Projektordner existiert nicht.")
     target = project / ".agents/skills/gg"
     config = project / ".codex/config.toml"
+    for path in (project / ".agents", project / ".agents/skills", project / ".codex", config):
+        if path.is_symlink():
+            raise router.RouterError("Einrichtung über symbolische Links nicht erlaubt; nichts geändert.")
     original = config.read_text(encoding="utf-8") if config.exists() else ""
     parsed = tomllib.loads(original)
     if target.exists() or "simple_accounts_router" in parsed.get("mcp_servers", {}):
