@@ -357,6 +357,9 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
             "requested_tier": tier, "actual_tier": actual_tier,
             "profile_preference": profile, "effort_preference": effort_preference,
             "model_preference": model_preference, "effort_floor": effort_floor,
+            "safety_floor": safety_floor,
+            "evaluation": [{"dimension": k, "score": s[k], "weight": w, "points": s[k] * w}
+                           for k, w in p["weights"].items()],
             "model": model["model"], "effort": effort, "agents": agents,
             "max_concurrent_subagents": len(agents), "reasons": reasons,
             "acceptance_checks": a["acceptance_checks"], "evidence": a["evidence"],
@@ -629,7 +632,12 @@ def main_command(prefix: list[str], plan: dict[str, Any], project: Path,
     cmd += [f"Lies den vollständigen Auftrag in {json.dumps(str(prompt_file), ensure_ascii=False)} "
             "und führe ihn im Projekt aus. Prüfe zuerst die relevanten Eingaben. "
             "Verwende die externe Startkonfiguration und nur die vorgesehenen Nebenrollen. "
-            "Keine erneute Eingangsprüfung starten; keine rekursiven Router-/Codex-Prozesse."]
+            "Keine erneute Eingangsprüfung starten; keine rekursiven Router-/Codex-Prozesse. "
+            "Zeige zuerst den geprüften Arbeitsplan und aktualisiere seinen Status nach echten Ergebnissen. "
+            "Nenne verwendete Skills/Werkzeuge mit ihrem Zweck. Prüfe benötigte Plugins vor der Arbeit; "
+            "die persönliche Benutzerkonfiguration wird vom Starter nicht geladen. "
+            "Fehlende Zugriffe konkret melden, keine Installation, Anmeldung oder Konfigurationsänderung "
+            "ohne Auftrag. Bewerte Erfolg anhand der Abschlusskriterien und tatsächlicher Tests."]
     return cmd
 
 
@@ -789,6 +797,8 @@ def cli() -> int:
                   args.profile, args.effort, args.model)
     write_json(root / "assessment.json", assessment)
     plan["catalog_source"] = "offline_unverified" if offline else "live_model_list"
+    plan["intake"] = (load_json(root / "intake.json") if (root / "intake.json").exists()
+                      else {"basis": "provided_assessment", "model": None, "effort": None})
     write_json(root / "plan.json", plan)
     show_plan(plan, simulated=offline)
     print(f"Routing-Protokoll: {root}", flush=True)
