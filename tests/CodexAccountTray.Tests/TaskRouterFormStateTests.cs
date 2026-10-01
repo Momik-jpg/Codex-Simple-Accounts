@@ -18,19 +18,25 @@ public sealed class TaskRouterFormStateTests
                 using var form = new TaskRouterForm(
                     new TaskRouterLauncher(new CodexCommand("unused-test-command", [])),
                     () => Path.GetTempPath(), new TaskRouterActivity(), () => null);
-                form.CreateControl();
-                var tabs = Descendants(form).OfType<TabControl>().Single();
+                // Host the real dialog layout without showing TaskRouterForm itself:
+                // its Shown handler would start live model discovery.
+                using var host = new Form { ClientSize = form.ClientSize, Font = form.Font,
+                    BackColor = form.BackColor, Text = form.Text, ShowInTaskbar = false };
+                host.Controls.Add(form.Controls[0]);
+                host.Show();
+                var tabs = Descendants(host).OfType<TabControl>().Single();
                 Assert.Equal("Arbeitsplan", tabs.TabPages[0].Text);
                 Assert.Equal("Auswahl, Bewertung & Laufstatus", tabs.TabPages[1].Text);
                 var plan = Descendants(tabs.TabPages[0]).OfType<TextBox>().Single();
                 Assert.True(plan.ReadOnly);
                 plan.Text = TaskRouterLauncher.FormatWorkPlan("""{"status":"ready","goal":"Änderung sicher prüfen","plan_steps":[{"action":"Projekt untersuchen","verification":"Relevante Dateien bestätigen"},{"action":"Regression prüfen","verification":"Alle Tests bestehen"}]}""");
                 tabs.SelectedIndex = 0;
-                form.PerformLayout();
+                host.PerformLayout();
+                Assert.True(plan.Visible);
                 Assert.True(tabs.Width > 500);
                 Assert.True(tabs.Height > 100);
-                using var bitmap = new Bitmap(form.Width, form.Height);
-                form.DrawToBitmap(bitmap, form.ClientRectangle);
+                using var bitmap = new Bitmap(host.Width, host.Height);
+                host.DrawToBitmap(bitmap, new Rectangle(Point.Empty, host.Size));
                 string? artifacts = Environment.GetEnvironmentVariable("ROUTER_UI_ARTIFACTS");
                 if (!string.IsNullOrWhiteSpace(artifacts))
                 {
@@ -40,6 +46,7 @@ public sealed class TaskRouterFormStateTests
             }
             catch (Exception exception) { failure = exception; }
         });
+        thread.IsBackground = true;
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "Native UI rendering timed out.");
