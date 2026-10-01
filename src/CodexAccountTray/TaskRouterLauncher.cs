@@ -461,9 +461,9 @@ public sealed class TaskRouterLauncher
     {
         using JsonDocument doc = JsonDocument.Parse(json);
         JsonElement root = doc.RootElement;
-        var text = new StringBuilder("Arbeitsplan · Entwurf vor Projektinspektion\r\n\r\n");
+        var text = new StringBuilder("Entwurf vor Projektinspektion · ");
         if (root.TryGetProperty("goal", out JsonElement goal))
-            text.AppendLine($"Ziel: {goal.GetString()}\r\n");
+            text.AppendLine($"Ziel: {goal.GetString()}");
         if (root.GetProperty("status").GetString() == "blocked")
             text.AppendLine($"Blockiert: {root.GetProperty("blocking_reason").GetString()}\r\n");
         if (root.TryGetProperty("plan_steps", out JsonElement steps))
