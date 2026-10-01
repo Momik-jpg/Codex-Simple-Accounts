@@ -90,6 +90,87 @@ class PolicyTests(unittest.TestCase):
         a = copy.deepcopy(self.simple); a['scores']['failure_impact'] = 2
         self.assertEqual(self.plan(a)['model'], 'gpt-6-sol')
 
+    def score_tier_cases(self):
+        for tier, scores in (
+            ('fast', {}),
+            ('balanced', {'reasoning': 2, 'coupling': 2}),
+            ('deep', {'reasoning': 2, 'ambiguity': 1, 'coupling': 3, 'visual': 3}),
+        ):
+            a = copy.deepcopy(self.simple)
+            a['scores'].update(scores)
+            yield tier, a
+
+    def safety_floor_cases(self):
+        for tier, base in self.score_tier_cases():
+            for confidence, impact in (('low', 0), ('high', 2), ('high', 3)):
+                a = copy.deepcopy(base)
+                a['confidence'] = confidence
+                a['scores']['failure_impact'] = impact
+                yield tier, confidence, impact, a
+
+    def test_balanced_safety_floor_applies_across_score_tiers_and_preferences(self):
+        for score_tier, confidence, impact, a in self.safety_floor_cases():
+            expected_tiers = {'auto': 'balanced' if score_tier == 'fast' else score_tier,
+                              'fast': 'balanced', 'balanced': 'balanced', 'deep': 'deep'}
+            for profile in ('auto', 'fast', 'balanced', 'deep'):
+                for effort in ('auto', 'minimal', 'low', 'medium'):
+                    with self.subTest(score_tier=score_tier, confidence=confidence,
+                                      impact=impact, profile=profile, effort=effort):
+                        plan = self.plan(a, profile=profile, effort_preference=effort)
+                        expected_tier = expected_tiers[profile]
+                        self.assertEqual(plan['requested_tier'], expected_tier)
+                        self.assertEqual(plan['actual_tier'], expected_tier)
+                        self.assertEqual(plan['effort_floor'], 'medium')
+                        self.assertGreaterEqual(r.EFFORTS.index(plan['effort']),
+                                                r.EFFORTS.index('medium'))
+                        self.assertTrue(any('Unsichere Einstufung oder Fehlerfolgen' in reason
+                                            for reason in plan['reasons']))
+
+    def test_manual_fast_model_cannot_bypass_balanced_safety_floor(self):
+        for tier, confidence, impact, a in self.safety_floor_cases():
+            with self.subTest(score_tier=tier, confidence=confidence, impact=impact):
+                with self.assertRaisesRegex(r.RouterError, 'mindestens balanced'):
+                    self.plan(a, model_preference='gpt-6-luna', effort_preference='low')
+
+    def test_manual_balanced_model_keeps_medium_safety_floor(self):
+        for tier, confidence, impact, a in self.safety_floor_cases():
+            for effort in ('minimal', 'low', 'medium'):
+                with self.subTest(score_tier=tier, confidence=confidence,
+                                  impact=impact, effort=effort):
+                    plan = self.plan(a, model_preference='gpt-6-sol', effort_preference=effort)
+                    self.assertEqual((plan['actual_tier'], plan['effort']), ('balanced', 'medium'))
+                    self.assertEqual(plan['effort_floor'], 'medium')
+
+    def test_balanced_safety_floor_skips_models_without_medium_effort(self):
+        cat = copy.deepcopy(self.catalog)
+        next(model for model in cat if model['model'] == 'gpt-6-sol')['efforts'] = ['low']
+        next(model for model in cat if model['model'] == 'gpt-6-astra')['efforts'] = ['high']
+        for tier, confidence, impact, a in self.safety_floor_cases():
+            with self.subTest(score_tier=tier, confidence=confidence, impact=impact):
+                plan = r.decide(a, cat, self.p, profile='fast', effort_preference='low')
+                self.assertEqual((plan['actual_tier'], plan['effort']), ('deep', 'high'))
+                self.assertEqual(plan['effort_floor'], 'medium')
+
+    def test_balanced_safety_floor_blocks_when_catalog_has_only_low_effort(self):
+        cat = copy.deepcopy(self.catalog)
+        for model in cat:
+            model['efforts'] = ['low']
+        for tier, confidence, impact, a in self.safety_floor_cases():
+            for model in ('auto', 'gpt-6-sol'):
+                with self.subTest(score_tier=tier, confidence=confidence,
+                                  impact=impact, model=model):
+                    with self.assertRaisesRegex(r.RouterError, 'mindestens medium|Mindeststufe medium'):
+                        r.decide(a, cat, self.p, profile='fast', effort_preference='low',
+                                 model_preference=model)
+
+    def test_manual_fast_preferences_remain_available_without_safety_trigger(self):
+        for tier, a in self.score_tier_cases():
+            with self.subTest(score_tier=tier):
+                plan = self.plan(a, profile='fast', model_preference='gpt-6-luna',
+                                 effort_preference='low')
+                self.assertEqual((plan['actual_tier'], plan['effort']), ('fast', 'low'))
+                self.assertEqual(plan['effort_floor'], 'minimal')
+
     def test_high_impact_difficult_verification_deep(self):
         a = copy.deepcopy(self.simple); a['scores'].update(failure_impact=3, verification_difficulty=2)
         self.assertEqual(self.plan(a)['model'], 'gpt-6-astra')
