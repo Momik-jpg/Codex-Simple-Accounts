@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/workflows/ci.yml/badge.svg)](https://github.com/Momik-jpg/Codex-Simple-Accounts/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Eine lokale Windows-App für Codex-Konten, Limits und neue Aufgaben mit geprüfter Modellwahl.
+Eine lokale Windows-App für Codex-Konten, Limits und Aufgabenbewertung direkt im bestehenden Codex-Chat.
 
 ## Funktionen
 
@@ -17,7 +17,19 @@ Eine lokale Windows-App für Codex-Konten, Limits und neue Aufgaben mit geprüft
 - Lokale Sicherheitsuntergrenzen, sichtbare Fallbacks und erneute Katalog-/Regelprüfung unmittelbar vor dem Start
 - Wiederverwendbare Einstufung für einen schnelleren Start ohne doppelten Klassifikationsaufruf
 - Vorschau eines auftragsbezogenen KI-Arbeitsplans mit Prüfschritten und ungeprüften Abschlusskriterien; nach Projektinspektion zu bestätigen
-- Direkter Aufgabenrouter-Einstieg im Tray-Menü mit klaren Lauf-, Abbruch-, Eingabe- und Kontowechselstatus
+- Aufgaben direkt in Codex über gg bewerten und ausführen; bisheriger separater Starter nur unter „Erweitert“
+
+## Aufgaben direkt in Codex: gg
+
+Nach einmaliger [Chat-Einrichtung](docs/AUTO_TASK_ROUTER.md#gg-app-bewertung-im-bestehenden-codex-chat-optional) im vertrauten Projekt die Aufgabe schreiben und **gg im Slash-Skill-Menü wählen**, alternativ `$gg`:
+
+```text
+$gg Behebe den Fehler im Login und prüfe die betroffenen Tests.
+```
+
+Die App-Bewertung läuft im Hintergrund. Codex zeigt Plan, tatsächlichen Bewerter und Auswahlgründe, übernimmt die Umsetzung und delegiert geeignete Teilaufgaben über verfügbare Unteragenten-Funktionen. Der bestehende Chat bleibt Hauptchat. Kein Aufgabenformular und kein neuer Hauptchat für diesen Ablauf. Verfügbarkeit und konkrete Modellwahl der Unteragenten hängen vom Client ab; das Hauptmodell wird nicht heimlich gewechselt.
+
+Die Chat-Anbindung braucht Python 3.11+, eine angemeldete Codex CLI und die dauerhaft vorhandenen TaskRouter-Dateien aus diesem PR. Sie wird nicht durch blosses Tippen von `/gg` installiert. Ein lokaler Bewerter auf einem ausgeschalteten Laptop ist mobil nicht erreichbar. Der frühere Dialog ist ein optionaler separater Starter unter **Tray → Erweitert**; er ist nicht der gg-Ablauf.
 
 ## Sicherer Wechselablauf
 
