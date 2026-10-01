@@ -407,10 +407,31 @@ public sealed class TaskRouterLauncher
         if (root.TryGetProperty("effort_floor", out JsonElement floor))
             text.AppendLine($"Mindest-Denkstufe: {floor.GetString()}");
         if (root.TryGetProperty("requested_tier", out JsonElement tier))
-            text.AppendLine($"Qualitätsprofil: {FormatProfile(tier.GetString() ?? "auto")}");
+            text.AppendLine($"Empfohlenes Qualitätsprofil: {FormatProfile(tier.GetString() ?? "auto")}");
+        if (root.TryGetProperty("actual_tier", out JsonElement actualTier))
+            text.AppendLine($"Ausgewähltes Modellprofil: {FormatProfile(actualTier.GetString() ?? "auto")}");
+        if (root.TryGetProperty("safety_floor", out JsonElement safetyFloor))
+            text.AppendLine($"Sicherheitsgrenze: {FormatProfile(safetyFloor.GetString() ?? "auto")}");
         text.AppendLine($"Arbeitsumfang: {root.GetProperty("workload").GetString()} (keine Zeitprognose)");
         if (root.TryGetProperty("confidence", out JsonElement confidence))
             text.AppendLine($"Einstufungssicherheit: {confidence.GetString()} (nur Eingangsprüfung)");
+        if (root.TryGetProperty("intake", out JsonElement intake))
+        {
+            string? intakeModel = intake.TryGetProperty("model", out JsonElement im) ? im.GetString() : null;
+            text.AppendLine(string.IsNullOrWhiteSpace(intakeModel)
+                ? "Bewertet durch: bereitgestellte Einstufung; kein neuer Modellaufruf"
+                : $"Bewertet durch: {intakeModel} / {intake.GetProperty("effort").GetString()}");
+        }
+        text.AppendLine("Auswahl durch: feste Router-Regeln; kein Leistungsbenchmark");
+        text.AppendLine("Erfolg durch: belegte Abschlusskriterien und Tests; noch nicht nachgewiesen");
+        text.AppendLine("Skills/Plugins: Verfügbarkeit vor Nutzung prüfen; persönliche Benutzerkonfiguration wird nicht geladen");
+        text.AppendLine("Werkzeugnutzung: erst im Codex-Lauf bestätigt, hier keine Nutzungsnachweise");
+        if (root.TryGetProperty("evaluation", out JsonElement evaluation))
+        {
+            text.AppendLine("Bewertung · Teilwert (0–3) × Gewicht = Punkte:");
+            foreach (JsonElement item in evaluation.EnumerateArray())
+                text.AppendLine($"• {item.GetProperty("dimension").GetString()}: {item.GetProperty("score").GetInt32()} × {item.GetProperty("weight").GetInt32()} = {item.GetProperty("points").GetInt32()}");
+        }
         text.AppendLine($"Subagenten: höchstens {root.GetProperty("max_concurrent_subagents").GetInt32()}");
         if (root.TryGetProperty("reasons", out JsonElement reasons))
             foreach (JsonElement reason in reasons.EnumerateArray()) text.AppendLine("• " + reason.GetString());
@@ -433,6 +454,25 @@ public sealed class TaskRouterLauncher
             foreach (JsonElement check in checks.EnumerateArray())
                 text.AppendLine("• " + check.GetString());
         }
+        return text.ToString();
+    }
+
+    public static string FormatWorkPlan(string json)
+    {
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
+        var text = new StringBuilder("Arbeitsplan · Entwurf vor Projektinspektion\r\n\r\n");
+        if (root.TryGetProperty("goal", out JsonElement goal))
+            text.AppendLine($"Ziel: {goal.GetString()}\r\n");
+        if (root.GetProperty("status").GetString() == "blocked")
+            text.AppendLine($"Blockiert: {root.GetProperty("blocking_reason").GetString()}\r\n");
+        if (root.TryGetProperty("plan_steps", out JsonElement steps))
+        {
+            int number = 0;
+            foreach (JsonElement step in steps.EnumerateArray())
+                text.AppendLine($"{++number}. Offen · {step.GetProperty("action").GetString()}\r\n   Erfolg prüfen: {step.GetProperty("verification").GetString()}\r\n");
+        }
+        text.AppendLine("Fortschritt und verwendete Werkzeuge werden in der gestarteten Codex-Sitzung berichtet. Dieser Dialog beobachtet keine erledigten Arbeitsschritte.");
         return text.ToString();
     }
 

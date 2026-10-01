@@ -85,6 +85,8 @@ public sealed class TaskRouterForm : Form
     private readonly TextBox _policy = new() { Dock = DockStyle.Fill, PlaceholderText = "Optional: eigene routing_policy.json" };
     private readonly TextBox _task = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, MaxLength = 60000, AcceptsReturn = true };
     private readonly TextBox _report = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, ReadOnly = true };
+    private readonly TextBox _workPlan = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, ReadOnly = true, AccessibleName = "Vorläufiger Arbeitsplan" };
+    private readonly TabControl _decisionTabs = new() { Dock = DockStyle.Fill };
     private readonly Label _imageLabel = new() { AutoSize = false, AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label _taskCount = new() { AutoSize = true, ForeColor = Muted };
     private readonly Label _writeHint = new() { AutoSize = false, Dock = DockStyle.Fill, ForeColor = Muted };
@@ -301,7 +303,14 @@ public sealed class TaskRouterForm : Form
             Font = new Font("Segoe UI Semibold", 10)
         }, 0, 8);
         _report.Text = "Noch keine Analyse. «Analyse & Plan» erstellt einen vorläufigen Arbeitsplan, führt den Projektauftrag aber nicht aus.";
-        layout.Controls.Add(_report, 0, 9);
+        _workPlan.Text = "Noch kein Arbeitsplan. «Analyse & Plan» erstellt die vorgeschlagenen Schritte und ihre Prüfkriterien.";
+        var planPage = new TabPage("Arbeitsplan") { BackColor = Surface };
+        var decisionPage = new TabPage("Auswahl, Bewertung & Laufstatus") { BackColor = Surface };
+        planPage.Controls.Add(_workPlan);
+        decisionPage.Controls.Add(_report);
+        _decisionTabs.TabPages.AddRange([planPage, decisionPage]);
+        _decisionTabs.SelectedIndex = 1;
+        layout.Controls.Add(_decisionTabs, 0, 9);
 
         var buttons = new FlowLayoutPanel
         {
@@ -313,7 +322,7 @@ public sealed class TaskRouterForm : Form
         buttons.Controls.AddRange([_close, _logs, _cancel, _run, _plan]);
         layout.Controls.Add(buttons, 0, 10);
 
-        foreach (TextBox box in new[] { _project, _policy, _task, _report })
+        foreach (TextBox box in new[] { _project, _policy, _task, _report, _workPlan })
         {
             box.BackColor = Surface;
             box.ForeColor = Color.White;
@@ -660,6 +669,7 @@ public sealed class TaskRouterForm : Form
         _startedAtUtc = DateTime.UtcNow;
         _elapsedTimer.Start();
         UpdateUi();
+        _decisionTabs.SelectedIndex = 1;
         _report.Text = execute
             ? TaskRouterLauncher.FormatRequest(request, execute) +
               (request.AssessmentFile is null
@@ -684,12 +694,18 @@ public sealed class TaskRouterForm : Form
                     _cachedDecisionKey = CurrentDecisionKey();
                 }
             }
+            string resultPlan = Path.Combine(result.RunDirectory, "decision", "plan.json");
+            if (File.Exists(resultPlan))
+            {
+                _workPlan.Text = TaskRouterLauncher.FormatWorkPlan(await File.ReadAllTextAsync(resultPlan));
+                if (!execute && result.ExitCode == 0) _decisionTabs.SelectedIndex = 0;
+            }
             _report.Text = result.Report + "\r\n\r\n" + TaskRouterLauncher.FormatRequest(request, execute);
             if (!string.IsNullOrEmpty(settingsWarning))
             {
                 _report.AppendText("\r\n\r\nHinweis: " + settingsWarning);
             }
-            _status.Text = result.ExitCode == 0 ? "Abgeschlossen." :
+            _status.Text = result.ExitCode == 0 ? (execute ? "Codex-Prozess beendet; Ergebnis im Codex-Bericht prüfen." : "Einstufung und Plan bereit; Auftrag noch nicht ausgeführt.") :
                 result.ExitCode == 130 ? "Abgebrochen." : $"Beendet mit Exit-Code {result.ExitCode}.";
             _status.ForeColor = result.ExitCode == 0 ? Success : Warning;
         }
@@ -881,6 +897,7 @@ public sealed class TaskRouterForm : Form
 
     private void InvalidateCachedAssessment()
     {
+        _workPlan.Text = "Auftrag geändert. Arbeitsplan erneut erstellen.";
         _cachedAssessment = null;
         _cachedAssessmentKey = null;
         _cachedPlan = null;
