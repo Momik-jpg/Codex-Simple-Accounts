@@ -23,7 +23,7 @@ public sealed class AccountManagerForm : Form
     private readonly Dictionary<int, ToolStripMenuItem> _logoutButtons = [];
     private readonly Dictionary<int, Panel> _activeIndicators = [];
     private readonly Dictionary<int, AccountCardPanel> _accountCards = [];
-    private readonly CheckBox _autoSwitch = new();
+    private readonly AccountToggle _autoSwitch = new();
     private readonly Panel _accountList = new();
     private readonly Label _activityStatus = new();
     private RoundedButton _addAccountButton = null!;
@@ -282,6 +282,7 @@ public sealed class AccountManagerForm : Form
                 button.BorderColor = _palette.Danger;
             }
         }
+        _autoSwitch.ApplyPalette(_palette);
         _themeButton.Text = _lightTheme ? "Dunkel" : "Hell";
         if (IsHandleCreated) NativeTheme.ApplyTitleBar(Handle, _palette.Background, _palette.Text, !_lightTheme);
         Invalidate(true);
@@ -553,5 +554,66 @@ public sealed class AccountManagerForm : Form
             eventArgs.Cancel = true;
             Hide();
         }
+    }
+}
+
+
+/// <summary>A keyboard-accessible checkbox drawn as an on/off switch.</summary>
+internal sealed class AccountToggle : CheckBox
+{
+    private AccountPalette _palette = AccountPalette.Dark;
+
+    public AccountToggle()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        Cursor = Cursors.Hand;
+        TabStop = true;
+        AccessibleRole = AccessibleRole.CheckButton;
+    }
+
+    public void ApplyPalette(AccountPalette palette)
+    {
+        _palette = palette;
+        Invalidate();
+    }
+
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        int gap = (int)(58 * DeviceDpi / 96f);
+        Size text = TextRenderer.MeasureText(Text, Font);
+        return new Size(text.Width + gap, Math.Max(text.Height + 4, (int)(28 * DeviceDpi / 96f)));
+    }
+
+    protected override void OnCheckedChanged(EventArgs e)
+    {
+        base.OnCheckedChanged(e);
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(BackColor);
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        int D(int value) => (int)(value * DeviceDpi / 96f);
+        int height = D(22), width = D(40);
+        var track = new Rectangle(D(2), (Height - height) / 2, width, height);
+        using var path = new System.Drawing.Drawing2D.GraphicsPath();
+        path.AddArc(track.Left, track.Top, height, height, 90, 180);
+        path.AddArc(track.Right - height, track.Top, height, height, 270, 180);
+        path.CloseFigure();
+        using var fill = new SolidBrush(Checked && Enabled ? _palette.Success : _palette.Track);
+        e.Graphics.FillPath(fill, path);
+        using var border = new Pen(Checked && Enabled ? _palette.Success : _palette.Muted);
+        e.Graphics.DrawPath(border, path);
+        int diameter = height - D(6);
+        int left = Checked ? track.Right - diameter - D(3) : track.Left + D(3);
+        using var knob = new SolidBrush(Enabled ? (Checked ? Color.White : _palette.Text) : _palette.Muted);
+        e.Graphics.FillEllipse(knob, left, track.Top + D(3), diameter, diameter);
+        var textBounds = new Rectangle(D(54), 0, Math.Max(0, Width - D(54)), Height);
+        TextRenderer.DrawText(e.Graphics, Text, Font, textBounds, Enabled ? _palette.Text : _palette.Muted,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        if (Focused && ShowFocusCues)
+            ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -1, -1), _palette.Text, BackColor);
     }
 }
