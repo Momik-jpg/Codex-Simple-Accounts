@@ -1,6 +1,6 @@
 namespace CodexAccountTray;
 
-public sealed class AccountManagerForm : Form
+public sealed class AccountManagerForm : ThemedAccountWindow
 {
     private AccountPalette _palette = AccountPalette.Dark;
     private bool _lightTheme;
@@ -24,7 +24,7 @@ public sealed class AccountManagerForm : Form
     private readonly Dictionary<int, Panel> _activeIndicators = [];
     private readonly Dictionary<int, AccountCardPanel> _accountCards = [];
     private readonly AccountToggle _autoSwitch = new();
-    private readonly Panel _accountList = new();
+    private readonly ThemedAccountList _accountList = new();
     private readonly Label _activityStatus = new();
     private RoundedButton _addAccountButton = null!;
     private bool _operationInProgress;
@@ -50,7 +50,6 @@ public sealed class AccountManagerForm : Form
         Icon = icon;
         ClientSize = new Size(1200, 800);
         MinimumSize = new Size(1040, 680);
-        FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -204,7 +203,7 @@ public sealed class AccountManagerForm : Form
         _activityStatus.TextAlign = ContentAlignment.MiddleLeft;
         root.Controls.Add(_activityStatus, 0, 1);
         _accountList.Dock = DockStyle.Fill;
-        _accountList.AutoScroll = true;
+        _accountList.Viewport.Resize += (_, _) => ResizeAccountCards();
         _accountList.Resize += (_, _) => ResizeAccountCards();
         root.Controls.Add(_accountList, 0, 2);
         RebuildAccountCards(_accountStore.AccountNumbers);
@@ -283,6 +282,8 @@ public sealed class AccountManagerForm : Form
             }
         }
         _autoSwitch.ApplyPalette(_palette);
+        _accountList.ApplyPalette(_palette);
+        ApplyWindowPalette(_palette);
         _themeButton.Text = _lightTheme ? "Dunkel" : "Hell";
         if (IsHandleCreated) NativeTheme.ApplyTitleBar(Handle, _palette.Background, _palette.Text, !_lightTheme);
         Invalidate(true);
@@ -300,8 +301,9 @@ public sealed class AccountManagerForm : Form
     private void RebuildAccountCards(IEnumerable<int> accounts)
     {
         _accountList.SuspendLayout();
-        foreach (Control previous in _accountList.Controls.Cast<Control>().ToArray()) previous.Dispose();
-        _accountList.Controls.Clear();
+        foreach (Control previous in _accountList.Viewport.Controls.Cast<Control>().ToArray()) previous.Dispose();
+        _accountList.Viewport.Controls.Clear();
+        _accountList.ScrollTo(0);
         _meters.Clear();
         _avatars.Clear();
         _statusLabels.Clear();
@@ -315,10 +317,9 @@ public sealed class AccountManagerForm : Form
         foreach (int account in accounts.Order())
         {
             AccountCardPanel card = CreateAccountCard(account);
-            card.Location = new Point(0, index++ * (int)(146 * DeviceDpi / 96f));
-            _accountList.Controls.Add(card);
+            _accountList.AddCard(card, index++ * (int)(146 * DeviceDpi / 96f));
         }
-        _accountList.AutoScrollMinSize = new Size(0, index * (int)(146 * DeviceDpi / 96f));
+        _accountList.SetContentHeight(index * (int)(146 * DeviceDpi / 96f));
         ResizeAccountCards();
         _accountList.ResumeLayout();
         if (_themeButton is not null) ApplyTheme();
@@ -326,7 +327,7 @@ public sealed class AccountManagerForm : Form
 
     private void ResizeAccountCards()
     {
-        int width = Math.Max(600, _accountList.ClientSize.Width - 20);
+        int width = Math.Max(600, _accountList.Viewport.ClientSize.Width - (int)(4 * DeviceDpi / 96f));
         foreach (AccountCardPanel card in _accountCards.Values)
         {
             card.Width = width;
