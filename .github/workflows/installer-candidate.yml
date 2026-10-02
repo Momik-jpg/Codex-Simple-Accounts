@@ -1,0 +1,55 @@
+name: Windows installer candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Validate router and package metadata
+        shell: pwsh
+        run: |
+          python tools/verify_metadata.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tools/task-router/tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build and test Windows installer
+        shell: pwsh
+        run: ./build.ps1
+      - name: Generate and verify installer checksum
+        shell: pwsh
+        run: |
+          $installer = Get-Item 'artifacts/installer/Codex-Konten-Installer.exe'
+          if ($installer.Length -le 0) { throw 'Installer is empty' }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content 'artifacts/installer/SHA256SUMS.txt' -Encoding ascii
+          $recorded = (Get-Content 'artifacts/installer/SHA256SUMS.txt').Split(' ')[0]
+          if ($recorded -ne (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Checksum verification failed' }
+          @"
+          Source commit: ${{ github.event.pull_request.head.sha || github.sha }}
+          Installer bytes: $($installer.Length)
+          SHA-256: $hash
+          Candidate only: clean install, upgrade, uninstall and live account acceptance remain required.
+          "@ | Set-Content 'artifacts/installer/BUILD-INFO.txt' -Encoding utf8
+      - name: Upload installer candidate (not a release)
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer-candidate
+          path: artifacts/installer/
+          if-no-files-found: error
+          retention-days: 30

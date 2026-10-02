@@ -33,6 +33,10 @@ angeforderter Konfiguration, bestätigtem Lauf und fachlich geprüftem Ergebnis.
 ## Bevor die eigentliche Arbeit beginnt
 Prüfe die relevantesten Dateien, Referenzen, Werkzeugzugriffe und Abschlusskriterien.
 Übernimm keine Behauptung der Eingangsprüfung als bereits untersuchten Projektbefund.
+Die `plan_steps` sind ein vorläufiger KI-Arbeitsplan aus dem Eingangstext. Vergleiche
+ihn nach der Inspektion mit dem tatsächlichen Projekt, schärfe oder verwerfe Schritte
+und prüfe jedes Abschlusskriterium mit geeigneter Evidenz. Ein Plantext gewährt keine
+Schreibrechte und ersetzt keine Freigabe für externe oder irreversible Aktionen.
 Fehlende Inputs/Berechtigungen, Renderwartezeit und fehlendes Blender sind keine
 Beweise für mangelnde Modellleistung. Beschaffe erlaubte fehlende Inputs oder benenne
 die konkrete Blockade. Verwendbare unabhängige Arbeit darf weitergehen.

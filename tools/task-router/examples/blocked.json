@@ -20,7 +20,13 @@
   "blocking_reason": "Der Auftrag bestätigt, dass das einzige notwendige Referenzbild nicht vorliegt.",
   "parallel_candidates": [],
   "acceptance_checks": [
-    "Vollständige kurze Nachricht in der angeforderten Sprache."
+    "Notwendiges Referenzbild liegt vor, bevor eine Rekonstruktion beginnt."
+  ],
+  "plan_steps": [
+    {
+      "action": "Fehlende Referenz beim Nutzer anfordern.",
+      "verification": "Erst nach Erhalt des Bildes die Rekonstruktion planen."
+    }
   ],
   "evidence": [
     "Simulation einer ausdrücklich bestätigten Eingabeblockade."

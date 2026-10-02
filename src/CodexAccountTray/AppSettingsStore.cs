@@ -5,13 +5,15 @@ namespace CodexAccountTray;
 
 public sealed record AppSettings(string ProjectFolder, bool AutoSwitchEnabled = false)
 {
+    public string Theme { get; init; } = "dark";
     public string RouterProfile { get; init; } = "auto";
     public string RouterEffort { get; init; } = "auto";
+    public string RouterModel { get; init; } = "auto";
     public int RouterMaxSubagents { get; init; } = 2;
 
     [JsonIgnore]
     public TaskRouterPreferences RouterPreferences =>
-        new TaskRouterPreferences(RouterProfile, RouterEffort, RouterMaxSubagents).Normalize();
+        new TaskRouterPreferences(RouterProfile, RouterEffort, RouterMaxSubagents, RouterModel).Normalize();
 }
 
 public sealed class AppSettingsStore
@@ -37,8 +39,10 @@ public sealed class AppSettingsStore
         TaskRouterPreferences router = settings.RouterPreferences;
         return settings with
         {
+            Theme = settings.Theme == "light" ? "light" : "dark",
             RouterProfile = router.Profile,
             RouterEffort = router.Effort,
+            RouterModel = router.Model,
             RouterMaxSubagents = router.MaxSubagents
         };
     }

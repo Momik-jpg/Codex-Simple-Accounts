@@ -132,7 +132,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
             bool routerActive = _taskRouterActivity.IsActive;
             var autoTask = new ToolStripMenuItem(routerActive
                 ? "Auto-Aufgabe läuft · anzeigen"
-                : "Neue Auto-Aufgabe …")
+                : "Separater Aufgabenstarter …")
             {
                 Enabled = true,
                 ForeColor = routerActive ? Color.FromArgb(108, 201, 145) : Color.FromArgb(112, 170, 240),
@@ -146,7 +146,16 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
                 _managerForm.ShowWindow();
                 _openTaskRouter(_managerForm);
             };
-            _menu.Items.Add(autoTask);
+            if (routerActive)
+            {
+                _menu.Items.Add(autoTask);
+            }
+            else
+            {
+                var advanced = new ToolStripMenuItem("Erweitert");
+                advanced.DropDownItems.Add(autoTask);
+                _menu.Items.Add(advanced);
+            }
         }
         else if (_taskRouterActivity.IsActive)
         {
@@ -196,7 +205,7 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
             ? "Auto-Swap gesperrt · Auto-Aufgabe läuft"
             : accountActivity
                 ? "Auto-Swap pausiert · Kontoaktion läuft"
-                : "Auto-Swap: 5 h 1 % · Woche 0 %";
+                : "Auto-Swap nach Schliessen · 1 % / 0 %";
         var autoSwap = new ToolStripMenuItem(autoSwapText)
         {
             Checked = _settingsStore.Load().AutoSwitchEnabled,
@@ -251,10 +260,14 @@ public sealed class TrayApplicationContext : ApplicationContext, IDisposable
         _monitor.Current.TryGetValue(account, out AccountLimits? limits);
         string status = pending
             ? "ChatGPT wird neu gestartet"
+            : _settingsStore.Load().AutoSwitchEnabled && _monitor.WaitingForCloseAccount == account
+                ? "Wechsel nach Schliessen"
             : active ? "Aktiv" : loggedIn ? "Angemeldet" : "Nicht angemeldet";
         string text = $"{_accountStore.DisplayName(account)}  ·  {status}\n" +
                       LimitTextFormatter.Format(limits?.Primary, "5 h", TimeZoneInfo.Local) + "\n" +
-                      LimitTextFormatter.Format(limits?.Secondary, "Woche", TimeZoneInfo.Local);
+                      LimitTextFormatter.Format(limits?.Secondary, "Woche", TimeZoneInfo.Local) + "\n" +
+                      (limits is null ? "Noch nicht geprüft" :
+                          $"{(limits.IsStale ? "Veraltet" : "Geprüft")} {limits.CheckedAt.ToLocalTime():HH:mm}");
         var item = new ToolStripMenuItem(text)
         {
             AutoSize = true,

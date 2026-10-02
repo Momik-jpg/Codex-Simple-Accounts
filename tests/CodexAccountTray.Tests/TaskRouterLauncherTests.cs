@@ -36,6 +36,14 @@ public sealed class TaskRouterLauncherTests : IDisposable
     }
 
     [Fact]
+    public void RenamedTextFileIsNotAcceptedAsImage()
+    {
+        string image = Path.Combine(_root, "fake.png");
+        File.WriteAllText(image, "not a PNG image");
+        Assert.Throws<ArgumentException>(() => TaskRouterLauncher.Validate(Request() with { Images = [image] }));
+    }
+
+    [Fact]
     public void TooManyImagesAreRejected() => Assert.Throws<ArgumentException>(() => TaskRouterLauncher.Validate(Request() with { Images = Enumerable.Repeat("a.png", 7).ToArray() }));
 
     [Fact]
@@ -51,6 +59,41 @@ public sealed class TaskRouterLauncherTests : IDisposable
     [Fact]
     public void MissingCachedAssessmentIsRejected() => Assert.Throws<ArgumentException>(() =>
         TaskRouterLauncher.Validate(Request() with { AssessmentFile = Path.Combine(_root, "missing-assessment.json") }));
+
+    [Fact]
+    public void ExpectedPlanRequiresAnExistingAssessment()
+    {
+        string plan = Path.Combine(_root, "plan.json");
+        File.WriteAllText(plan, "{}");
+        Assert.Throws<ArgumentException>(() => TaskRouterLauncher.Validate(
+            Request() with { ExpectedPlan = plan }));
+    }
+
+    [Fact]
+    public void InvalidManualModelIdIsRejected() => Assert.Throws<ArgumentException>(() =>
+        TaskRouterLauncher.Validate(Request() with { Model = "--dangerously-bypass-approvals-and-sandbox" }));
+
+    [Fact]
+    public void LiveCatalogParsingKeepsOnlySupportedVisibleModels()
+    {
+        string catalog = """{"data":[{"model":"gpt-test","hidden":false,"inputModalities":["text","image"],"supportedReasoningEfforts":[{"reasoningEffort":"low"},{"reasoningEffort":"high"}]},{"model":"hidden","hidden":true,"supportedReasoningEfforts":[{"reasoningEffort":"low"}]}]}""";
+        IReadOnlyList<TaskRouterModel> models = TaskRouterLauncher.ParseModels(catalog);
+        Assert.Single(models);
+        Assert.Equal("gpt-test", models[0].Id);
+        Assert.Equal(["low", "high"], models[0].Efforts);
+        Assert.True(models[0].SupportsImages);
+    }
+
+    [Fact]
+    public void MissingImageCapabilityIsNotAssumed()
+    {
+        string catalog = """{"data":[{"model":"text-only","supportedReasoningEfforts":[{"reasoningEffort":"low"}]}]}""";
+        Assert.False(TaskRouterLauncher.ParseModels(catalog)[0].SupportsImages);
+    }
+
+    [Fact]
+    public void MalformedLiveCatalogFailsClosed() => Assert.Throws<FormatException>(() =>
+        TaskRouterLauncher.ParseModels("{\"data\":[]}"));
 
     [Fact]
     public void PromptDoesNotEnterArgumentsAndNoShellIsUsed()
@@ -106,7 +149,8 @@ public sealed class TaskRouterLauncherTests : IDisposable
     [Fact]
     public void ImagesAndPolicyAreForwarded()
     {
-        string image = Path.Combine(_root, "reference.PNG"); File.WriteAllText(image, "fixture");
+        string image = Path.Combine(_root, "reference.PNG");
+        File.WriteAllBytes(image, [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
         string policy = Path.Combine(_root, "rules.json"); File.WriteAllText(policy, "{}");
         ProcessStartInfo info = Info(Request() with { Images = [image], PolicyFile = policy, MaxSubagents = 0 }, false);
         Assert.Contains(image, info.ArgumentList); Assert.Contains(policy, info.ArgumentList);
@@ -118,24 +162,31 @@ public sealed class TaskRouterLauncherTests : IDisposable
     {
         string assessment = Path.Combine(_root, "assessment.json");
         File.WriteAllText(assessment, "{}");
+        string plan = Path.Combine(_root, "plan.json");
+        File.WriteAllText(plan, "{}");
 
         ProcessStartInfo info = Info(Request() with
         {
             Profile = "deep",
             Effort = "xhigh",
-            AssessmentFile = assessment
+            AssessmentFile = assessment,
+            ExpectedPlan = plan,
+            Model = "gpt-6-astra"
         }, true);
 
         Assert.Equal("deep", info.ArgumentList[info.ArgumentList.IndexOf("--profile") + 1]);
         Assert.Equal("xhigh", info.ArgumentList[info.ArgumentList.IndexOf("--effort") + 1]);
+        Assert.Equal("gpt-6-astra", info.ArgumentList[info.ArgumentList.IndexOf("--model") + 1]);
         Assert.Equal(assessment, info.ArgumentList[info.ArgumentList.IndexOf("--assessment-file") + 1]);
+        Assert.Equal(plan, info.ArgumentList[info.ArgumentList.IndexOf("--expected-plan") + 1]);
     }
 
     [Fact]
     public void BlockedPlanDoesNotClaimASelectedModel()
     {
-        string report = TaskRouterLauncher.FormatPlan("""{"status":"blocked","blocking_reason":"Reference missing"}""");
+        string report = TaskRouterLauncher.FormatPlan("""{"status":"blocked","blocking_reason":"Reference missing","plan_steps":[{"action":"Ask for image","verification":"Image received"}]}""");
         Assert.Contains("Reference missing", report); Assert.DoesNotContain("Modell:", report);
+        Assert.Contains("Vorgeschlagener Klärungsschritt (ungeprüft): Ask for image", report);
     }
 
     [Fact]
@@ -144,6 +195,40 @@ public sealed class TaskRouterLauncherTests : IDisposable
         string report = TaskRouterLauncher.FormatPlan("""{"status":"ready","model":"fixture-model","effort":"high","workload":"L","max_concurrent_subagents":1,"reasons":["Test"],"agents":[]}""");
         Assert.Contains("fixture-model", report); Assert.Contains("höchstens 1", report);
         Assert.Contains("keine Zeitprognose", report);
+    }
+
+    [Fact]
+    public void PlanShowsProvisionalActionsAndUnverifiedChecks()
+    {
+        string report = TaskRouterLauncher.FormatPlan("""{"status":"ready","goal":"Testziel","model":"fixture-model","effort":"high","workload":"M","max_concurrent_subagents":0,"plan_steps":[{"action":"Projekt ansehen","verification":"Dateien bestätigen"}],"acceptance_checks":["Test bestehen"]}""");
+        Assert.Contains("Ziel: Testziel", report);
+        Assert.Contains("KI-Arbeitsplan · Entwurf vor Projektinspektion", report);
+        Assert.Contains("1. Projekt ansehen", report);
+        Assert.Contains("Prüfen: Dateien bestätigen", report);
+        Assert.Contains("Abschlusskriterien · noch nicht geprüft", report);
+        Assert.Contains("Test bestehen", report);
+    }
+
+    [Fact]
+    public void PlanDistinguishesEvaluatorRecommendationAndActualSelection()
+    {
+        string report = TaskRouterLauncher.FormatPlan("""{"status":"ready","model":"fixture-model","effort":"medium","workload":"M","max_concurrent_subagents":0,"requested_tier":"deep","actual_tier":"balanced","safety_floor":"balanced","intake":{"model":"fixture-classifier","effort":"low"},"evaluation":[{"dimension":"reasoning","score":2,"weight":2,"points":4}]}""");
+        Assert.Contains("Bewertet durch: fixture-classifier / low", report);
+        Assert.Contains("Empfohlenes Qualitätsprofil:", report);
+        Assert.Contains("Ausgewähltes Modellprofil:", report);
+        Assert.Contains("Sicherheitsgrenze:", report);
+        Assert.Contains("reasoning: 2 × 2 = 4", report);
+        Assert.Contains("noch nicht nachgewiesen", report);
+        Assert.Contains("persönliche Benutzerkonfiguration wird nicht geladen", report);
+    }
+
+    [Fact]
+    public void WorkPlanShowsOpenStepsWithoutInventingLiveProgress()
+    {
+        string report = TaskRouterLauncher.FormatWorkPlan("""{"status":"ready","goal":"Ziel","plan_steps":[{"action":"Dateien prüfen","verification":"Befund dokumentieren"}]}""");
+        Assert.Contains("1. Offen · Dateien prüfen", report);
+        Assert.Contains("Erfolg prüfen: Befund dokumentieren", report);
+        Assert.Contains("beobachtet keine erledigten Arbeitsschritte", report);
     }
 
     [Fact]

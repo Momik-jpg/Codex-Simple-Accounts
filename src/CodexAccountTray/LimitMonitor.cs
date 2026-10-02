@@ -13,7 +13,8 @@ public sealed class LimitMonitor : IDisposable
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly Dictionary<int, AccountLimits> _current = [];
     private CancellationTokenSource? _runCancellation;
-    private int? _pendingAccount;
+    private int? _waitingForCloseAccount;
+    private bool _reportedNoAlternative;
 
     public LimitMonitor(
         AppPaths paths,
@@ -29,10 +30,10 @@ public sealed class LimitMonitor : IDisposable
         _processManager = processManager;
         _interval = interval;
         _autoSwitchEnabled = autoSwitchEnabled ?? (() => true);
-        _processManager.ProcessExited += OnProcessExited;
     }
 
     public IReadOnlyDictionary<int, AccountLimits> Current => _current;
+    public int? WaitingForCloseAccount => _waitingForCloseAccount;
 
     public event EventHandler? LimitsUpdated;
 
@@ -51,10 +52,7 @@ public sealed class LimitMonitor : IDisposable
 
     public async Task RefreshAsync(CancellationToken cancellationToken)
     {
-        if (!await _refreshGate.WaitAsync(0, cancellationToken))
-        {
-            return;
-        }
+        await _refreshGate.WaitAsync(cancellationToken);
 
         try
         {
@@ -83,8 +81,8 @@ public sealed class LimitMonitor : IDisposable
                 }
             }
 
-            LimitsUpdated?.Invoke(this, EventArgs.Empty);
             await ApplySwitchRuleAsync(cancellationToken);
+            LimitsUpdated?.Invoke(this, EventArgs.Empty);
         }
         finally
         {
@@ -94,7 +92,6 @@ public sealed class LimitMonitor : IDisposable
 
     public void Dispose()
     {
-        _processManager.ProcessExited -= OnProcessExited;
         _runCancellation?.Cancel();
         _runCancellation?.Dispose();
         _refreshGate.Dispose();
@@ -102,17 +99,30 @@ public sealed class LimitMonitor : IDisposable
 
     private async Task RunAsync(CancellationToken cancellationToken)
     {
-        try
+        using var timer = new PeriodicTimer(_interval);
+        while (!cancellationToken.IsCancellationRequested)
         {
-            await RefreshAsync(cancellationToken);
-            using var timer = new PeriodicTimer(_interval);
-            while (await timer.WaitForNextTickAsync(cancellationToken))
+            try
             {
                 await RefreshAsync(cancellationToken);
+                if (!await timer.WaitForNextTickAsync(cancellationToken)) break;
             }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                Notice?.Invoke(this, $"Limitprüfung fehlgeschlagen; neuer Versuch in Kürze: {exception.Message}");
+                try
+                {
+                    if (!await timer.WaitForNextTickAsync(cancellationToken)) break;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
         }
     }
 
@@ -123,11 +133,10 @@ public sealed class LimitMonitor : IDisposable
             AccountLimits limits = await _protocol.ReadLimitsAsync(
                 _processManager.ActiveCodexHome,
                 cancellationToken);
+            if (_processManager.IsRunning || _processManager.ActiveAccount != account)
+                throw new InvalidOperationException("Das aktive Konto hat sich während der Limitprüfung geändert.");
             string activeAuth = Path.Combine(_processManager.ActiveCodexHome, "auth.json");
-            if (File.Exists(activeAuth))
-            {
-                _store.Save(account, await File.ReadAllBytesAsync(activeAuth, cancellationToken));
-            }
+            await RefreshStoredCredentialAsync(account, activeAuth, cancellationToken);
             return limits;
         }
 
@@ -146,10 +155,7 @@ public sealed class LimitMonitor : IDisposable
         try
         {
             AccountLimits limits = await _protocol.ReadLimitsAsync(probeHome, cancellationToken);
-            if (File.Exists(authFile))
-            {
-                _store.Save(account, await File.ReadAllBytesAsync(authFile, cancellationToken));
-            }
+            await RefreshStoredCredentialAsync(account, authFile, cancellationToken);
             return limits;
         }
         finally
@@ -161,18 +167,50 @@ public sealed class LimitMonitor : IDisposable
         }
     }
 
+    private async Task RefreshStoredCredentialAsync(int account, string authFile, CancellationToken cancellationToken)
+    {
+        byte[] refreshed = await File.ReadAllBytesAsync(authFile, cancellationToken);
+        try
+        {
+            byte[] stored = _store.Load(account);
+            try
+            {
+                if (stored.AsSpan().SequenceEqual(refreshed)) return;
+                string? expectedId = AccountProfileReader.ReadAccountId(stored);
+                string? refreshedId = AccountProfileReader.ReadAccountId(refreshed);
+                if (string.IsNullOrWhiteSpace(expectedId) ||
+                    !string.Equals(expectedId, refreshedId, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Die Kontoidentität hat sich während der Limitprüfung geändert.");
+                _store.Save(account, refreshed);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(stored);
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(refreshed);
+        }
+    }
+
     private async Task ApplySwitchRuleAsync(CancellationToken cancellationToken)
     {
         if (!_autoSwitchEnabled())
         {
+            _waitingForCloseAccount = null;
+            _reportedNoAlternative = false;
             return;
         }
 
         int? currentAccount = _processManager.ActiveAccount ?? _processManager.LastAccount;
         if (currentAccount is null ||
             !_current.TryGetValue(currentAccount.Value, out AccountLimits? currentLimits) ||
+            currentLimits.IsStale ||
             !currentLimits.RequiresSwitch)
         {
+            _waitingForCloseAccount = null;
+            _reportedNoAlternative = false;
             return;
         }
 
@@ -181,23 +219,34 @@ public sealed class LimitMonitor : IDisposable
             _store.AccountNumbers.Select(account => new AccountAvailability(
                 account,
                 _store.IsLoggedIn(account),
-                _current.TryGetValue(account, out AccountLimits? limits)
+                _current.TryGetValue(account, out AccountLimits? limits) && !limits.IsStale
                     ? limits.AvailablePrimaryPercent
                     : 0)));
 
         if (next is null)
         {
-            Notice?.Invoke(this, "Kein weiteres Konto mit verfügbarem 5-Stunden- und Wochenlimit.");
+            _waitingForCloseAccount = null;
+            if (!_reportedNoAlternative)
+            {
+                Notice?.Invoke(this, "Kein weiteres Konto mit verfügbarem 5-Stunden- und Wochenlimit.");
+                _reportedNoAlternative = true;
+            }
             return;
         }
 
-        if (_processManager.IsRunning)
+        _reportedNoAlternative = false;
+
+        if (_processManager is ISmoothSwitchControl control && control.IsDesktopRunning)
         {
-            _pendingAccount = next;
-            Notice?.Invoke(this, $"{_store.DisplayName(next.Value)} startet nach dem Ende der laufenden Antwort.");
+            if (_waitingForCloseAccount != next)
+                Notice?.Invoke(this, $"Limit erreicht. {_store.DisplayName(next.Value)} startet, sobald Codex geschlossen ist.");
+            _waitingForCloseAccount = next;
             return;
         }
 
+        if (_processManager.IsRunning) return;
+
+        _waitingForCloseAccount = null;
         try
         {
             await _processManager.StartAsync(next.Value, resumeLast: true, cancellationToken);
@@ -213,22 +262,4 @@ public sealed class LimitMonitor : IDisposable
         }
     }
 
-    private async void OnProcessExited(object? sender, EventArgs eventArgs)
-    {
-        int? next = _pendingAccount;
-        _pendingAccount = null;
-        if (next is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await _processManager.StartAsync(next.Value, resumeLast: true, CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            Notice?.Invoke(this, $"Wechsel zu {_store.DisplayName(next.Value)} fehlgeschlagen: {exception.Message}");
-        }
-    }
 }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 
 namespace CodexAccountTray;
 
@@ -51,7 +52,7 @@ public static class TaskRouterFormState
         }
         else
         {
-            status = "Bereit: Einstufung ansehen oder direkt mit Codex starten.";
+            status = "Bereit: Analyse & Plan ansehen oder direkt mit Codex starten.";
         }
         return new TaskRouterControlState(
             projectReady && taskReady && policyReady && imagesReady,
@@ -84,20 +85,24 @@ public sealed class TaskRouterForm : Form
     private readonly TextBox _policy = new() { Dock = DockStyle.Fill, PlaceholderText = "Optional: eigene routing_policy.json" };
     private readonly TextBox _task = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, MaxLength = 60000, AcceptsReturn = true };
     private readonly TextBox _report = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, ReadOnly = true };
+    private readonly TextBox _workPlan = new() { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, ReadOnly = true, AccessibleName = "Vorläufiger Arbeitsplan" };
+    private readonly TabControl _decisionTabs = new() { Dock = DockStyle.Fill };
     private readonly Label _imageLabel = new() { AutoSize = false, AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label _taskCount = new() { AutoSize = true, ForeColor = Muted };
     private readonly Label _writeHint = new() { AutoSize = false, Dock = DockStyle.Fill, ForeColor = Muted };
-    private readonly Label _status = new() { AutoSize = false, Dock = DockStyle.Fill, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label _status = new() { AutoSize = false, AutoEllipsis = true, Dock = DockStyle.Fill, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
     private readonly NumericUpDown _agents = new() { Minimum = 0, Maximum = 2, Value = 2, Width = 55 };
     private readonly ComboBox _profile = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190 };
+    private readonly ComboBox _model = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 210 };
     private readonly ComboBox _effort = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 185 };
+    private readonly RoundedButton _refreshModels = new() { Text = "Modelle laden", Size = new Size(125, 34) };
     private readonly CheckBox _write = new() { Text = "Lokale Änderungen erlauben", AutoSize = true };
     private readonly RoundedButton _projectBrowse = new() { Text = "Auswählen …", Dock = DockStyle.Fill };
     private readonly RoundedButton _policyBrowse = new() { Text = "Auswählen …", Dock = DockStyle.Fill };
     private readonly RoundedButton _chooseImages = new() { Text = "Bilder hinzufügen", Size = new Size(150, 36) };
     private readonly RoundedButton _clearImages = new() { Text = "Leeren", Size = new Size(82, 36), Enabled = false };
     private readonly RoundedButton _resetOptions = new() { Text = "Auto zurücksetzen", Size = new Size(145, 34) };
-    private readonly RoundedButton _plan = new() { Text = "Einstufung ansehen", Size = new Size(174, 44) };
+    private readonly RoundedButton _plan = new() { Text = "Analyse & Plan", Size = new Size(174, 44) };
     private readonly RoundedButton _run = new() { Text = "Mit Codex starten", Size = new Size(205, 44) };
     private readonly RoundedButton _cancel = new() { Text = "Abbrechen", Size = new Size(125, 44), Enabled = false };
     private readonly RoundedButton _logs = new() { Text = "Laufordner", Size = new Size(125, 44), Enabled = false };
@@ -114,6 +119,16 @@ public sealed class TaskRouterForm : Form
     private bool _cancelRequested;
     private string? _cachedAssessment;
     private string? _cachedAssessmentKey;
+    private string? _cachedPlan;
+    private string? _cachedDecisionKey;
+    private IReadOnlyList<TaskRouterModel> _models = [];
+    private readonly List<string> _effortCodes = ["auto"];
+    private readonly CancellationTokenSource _modelCancellation = new();
+    private bool _catalogReady;
+    private bool _loadingModels;
+    private string? _catalogProblem;
+    private readonly string _initialEffort;
+    private readonly string _initialModel;
 
     public TaskRouterForm(
         TaskRouterLauncher launcher,
@@ -132,10 +147,14 @@ public sealed class TaskRouterForm : Form
         _rememberProject = rememberProject;
         _rememberPreferences = rememberPreferences;
         TaskRouterPreferences preferences = (initialPreferences ?? new TaskRouterPreferences()).Normalize();
+        _initialEffort = preferences.Effort;
+        _initialModel = preferences.Model;
         _profile.Items.AddRange(["Automatisch (empfohlen)", "Schnell", "Ausgewogen", "Gründlich"]);
-        _effort.Items.AddRange(["Automatisch (empfohlen)", "Minimal", "Niedrig", "Mittel", "Hoch", "Sehr hoch", "Maximum", "Ultra"]);
+        _model.Items.Add("Automatisch aus Live-Katalog");
+        _model.SelectedIndex = 0;
+        _effort.Items.Add("Automatisch (empfohlen)");
         _profile.SelectedIndex = Array.IndexOf(TaskRouterPreferences.Profiles, preferences.Profile);
-        _effort.SelectedIndex = Array.IndexOf(TaskRouterPreferences.Efforts, preferences.Effort);
+        _effort.SelectedIndex = 0;
         _agents.Value = preferences.MaxSubagents;
         if (!string.IsNullOrWhiteSpace(initialProjectDirectory) && Directory.Exists(initialProjectDirectory))
         {
@@ -173,6 +192,8 @@ public sealed class TaskRouterForm : Form
             _elapsedTimer.Dispose();
             _toolTip.Dispose();
             _cancellation?.Dispose();
+            _modelCancellation.Cancel();
+            _modelCancellation.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -190,11 +211,11 @@ public sealed class TaskRouterForm : Form
                  {
                      new RowStyle(SizeType.Absolute, 72),
                      new RowStyle(SizeType.Absolute, 44),
-                     new RowStyle(SizeType.Absolute, 44),
                      new RowStyle(SizeType.Absolute, 28),
                      new RowStyle(SizeType.Percent, 42),
                      new RowStyle(SizeType.Absolute, 46),
-                     new RowStyle(SizeType.Absolute, 112),
+                     new RowStyle(SizeType.Absolute, 150),
+                     new RowStyle(SizeType.Absolute, 44),
                      new RowStyle(SizeType.Absolute, 44),
                      new RowStyle(SizeType.Absolute, 28),
                      new RowStyle(SizeType.Percent, 58),
@@ -214,7 +235,7 @@ public sealed class TaskRouterForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "Automatisch optimieren oder Qualitätsprofil und Denkaufwand selbst festlegen. Verwendet werden nur live angebotene Modelle.",
+            Text = "Auftrag bewerten, KI-Arbeitsplan prüfen und erst danach mit einem live angebotenen Modell starten.",
             ForeColor = Muted,
             AutoSize = false,
             AutoEllipsis = true,
@@ -225,16 +246,14 @@ public sealed class TaskRouterForm : Form
         layout.Controls.Add(header, 0, 0);
 
         layout.Controls.Add(PathRow("Projekt", _project, _projectBrowse), 0, 1);
-        layout.Controls.Add(PathRow("Eigene Regeln", _policy, _policyBrowse), 0, 2);
-
         var taskCaption = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         taskCaption.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         taskCaption.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         taskCaption.Controls.Add(new Label { Text = "Auftrag", AutoSize = true, Font = new Font("Segoe UI Semibold", 10) }, 0, 0);
         taskCaption.Controls.Add(_taskCount, 1, 0);
-        layout.Controls.Add(taskCaption, 0, 3);
+        layout.Controls.Add(taskCaption, 0, 2);
         _task.PlaceholderText = "Ziel, relevanter Kontext und überprüfbare Abschlusskriterien …";
-        layout.Controls.Add(_task, 0, 4);
+        layout.Controls.Add(_task, 0, 3);
 
         var images = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
         images.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -243,18 +262,20 @@ public sealed class TaskRouterForm : Form
         images.Controls.Add(_chooseImages, 0, 0);
         images.Controls.Add(_clearImages, 1, 0);
         images.Controls.Add(_imageLabel, 2, 0);
-        layout.Controls.Add(images, 0, 5);
+        layout.Controls.Add(images, 0, 4);
 
-        var optionPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1 };
+        var optionPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1 };
+        optionPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         optionPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         optionPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         optionPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var routingOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         routingOptions.Controls.AddRange([
             OptionLabel("Qualitätsprofil"), _profile,
-            OptionLabel("Denkaufwand"), _effort,
-            _resetOptions
+            OptionLabel("Modell"), _model, _refreshModels
         ]);
+        var effortOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        effortOptions.Controls.AddRange([OptionLabel("Denkaufwand"), _effort, _resetOptions]);
         var executionOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         executionOptions.Controls.AddRange([
             OptionLabel("Max. Nebenrollen"), _agents,
@@ -262,9 +283,12 @@ public sealed class TaskRouterForm : Form
             _write
         ]);
         optionPanel.Controls.Add(routingOptions, 0, 0);
-        optionPanel.Controls.Add(executionOptions, 0, 1);
-        optionPanel.Controls.Add(_writeHint, 0, 2);
-        layout.Controls.Add(optionPanel, 0, 6);
+        optionPanel.Controls.Add(effortOptions, 0, 1);
+        optionPanel.Controls.Add(executionOptions, 0, 2);
+        optionPanel.Controls.Add(_writeHint, 0, 3);
+        layout.Controls.Add(optionPanel, 0, 5);
+
+        layout.Controls.Add(PathRow("Eigene Regeln", _policy, _policyBrowse), 0, 6);
 
         var progressPanel = new Panel { Dock = DockStyle.Fill };
         progressPanel.Controls.Add(_status);
@@ -278,8 +302,15 @@ public sealed class TaskRouterForm : Form
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI Semibold", 10)
         }, 0, 8);
-        _report.Text = "Noch keine Einstufung. «Einstufung ansehen» führt den Projektauftrag nicht aus.";
-        layout.Controls.Add(_report, 0, 9);
+        _report.Text = "Noch keine Analyse. «Analyse & Plan» erstellt einen vorläufigen Arbeitsplan, führt den Projektauftrag aber nicht aus.";
+        _workPlan.Text = "Noch kein Arbeitsplan. «Analyse & Plan» erstellt die vorgeschlagenen Schritte und ihre Prüfkriterien.";
+        var planPage = new TabPage("Arbeitsplan") { BackColor = Surface };
+        var decisionPage = new TabPage("Auswahl, Bewertung & Laufstatus") { BackColor = Surface };
+        planPage.Controls.Add(_workPlan);
+        decisionPage.Controls.Add(_report);
+        _decisionTabs.TabPages.AddRange([planPage, decisionPage]);
+        _decisionTabs.SelectedIndex = 1;
+        layout.Controls.Add(_decisionTabs, 0, 9);
 
         var buttons = new FlowLayoutPanel
         {
@@ -291,7 +322,7 @@ public sealed class TaskRouterForm : Form
         buttons.Controls.AddRange([_close, _logs, _cancel, _run, _plan]);
         layout.Controls.Add(buttons, 0, 10);
 
-        foreach (TextBox box in new[] { _project, _policy, _task, _report })
+        foreach (TextBox box in new[] { _project, _policy, _task, _report, _workPlan })
         {
             box.BackColor = Surface;
             box.ForeColor = Color.White;
@@ -299,7 +330,7 @@ public sealed class TaskRouterForm : Form
         }
         foreach (RoundedButton button in new[]
                  {
-                     _projectBrowse, _policyBrowse, _chooseImages, _clearImages,
+                     _projectBrowse, _policyBrowse, _chooseImages, _clearImages, _refreshModels,
                      _resetOptions, _plan, _run, _cancel, _logs, _close
                  })
         {
@@ -310,7 +341,7 @@ public sealed class TaskRouterForm : Form
         _run.BackColor = Accent;
         _run.Font = new Font("Segoe UI Semibold", 10);
         _plan.Font = new Font("Segoe UI Semibold", 10);
-        foreach (ComboBox combo in new[] { _profile, _effort })
+        foreach (ComboBox combo in new[] { _profile, _model, _effort })
         {
             combo.BackColor = Surface;
             combo.ForeColor = Color.White;
@@ -318,17 +349,19 @@ public sealed class TaskRouterForm : Form
         }
 
         _inputs.AddRange([_project, _policy, _task, _projectBrowse, _policyBrowse, _chooseImages,
-            _profile, _effort, _resetOptions, _agents, _write]);
-        _toolTip.SetToolTip(_plan, "Entscheidung anzeigen, ohne den Projektauftrag auszuführen · Strg+Enter");
+            _profile, _model, _effort, _refreshModels, _resetOptions, _agents, _write]);
+        _toolTip.SetToolTip(_plan, "Auftrag bewerten und vorläufigen KI-Arbeitsplan anzeigen, ohne ihn auszuführen · Strg+Enter");
         _toolTip.SetToolTip(_run, "Neue Codex-Sitzung starten · Strg+Umschalt+Enter");
         _toolTip.SetToolTip(_cancel, "Nur den von diesem Dialog gestarteten Prozessbaum beenden · Esc");
         _toolTip.SetToolTip(_write, "Gilt nur für beauftragte lokale Änderungen; keine Veröffentlichung oder Zusammenführung.");
         _toolTip.SetToolTip(_agents, "Obergrenze, keine Pflicht zur Delegation.");
         _toolTip.SetToolTip(_profile, "Auto ist empfohlen. Manuelle Profile beeinflussen die Modellauswahl; Sicherheitsgrenzen bleiben erhalten.");
+        _toolTip.SetToolTip(_model, "Nur Modelle aus dem aktuellen Live-Katalog. Die lokale Regeldatei bestimmt erlaubte Qualitätsstufen.");
+        _toolTip.SetToolTip(_refreshModels, "Live-Katalog neu abfragen; vor jedem Start wird er nochmals geprüft.");
         _toolTip.SetToolTip(_effort, "Nur Denkstufen aus dem aktuellen Live-Katalog werden verwendet. Maximum/Ultra müssen ausdrücklich gewählt werden.");
         _toolTip.SetToolTip(_resetOptions, "Automatische Auswahl, zwei mögliche Nebenrollen und Schreibzugriff AUS.");
         _run.AccessibleName = "Aufgabe mit Codex starten";
-        _plan.AccessibleName = "Aufgabe nur einstufen";
+        _plan.AccessibleName = "Aufgabe bewerten und vorläufigen KI-Arbeitsplan anzeigen";
         Controls.Add(layout);
     }
 
@@ -360,15 +393,28 @@ public sealed class TaskRouterForm : Form
             UpdateUi();
         };
         _profile.SelectedIndexChanged += (_, _) => UpdateUi();
-        _effort.SelectedIndexChanged += (_, _) => UpdateUi();
+        _model.SelectedIndexChanged += (_, _) =>
+        {
+            if (_catalogReady) _catalogProblem = null;
+            UpdateEffortOptions();
+            UpdateUi();
+        };
+        _effort.SelectedIndexChanged += (_, _) =>
+        {
+            if (_catalogReady) _catalogProblem = null;
+            UpdateUi();
+        };
+        _refreshModels.Click += async (_, _) => await RefreshModelsAsync();
         _agents.ValueChanged += (_, _) => UpdateUi();
-        _write.CheckedChanged += (_, _) => UpdateWriteHint();
+        _write.CheckedChanged += (_, _) => UpdateUi();
         _resetOptions.Click += (_, _) =>
         {
             _profile.SelectedIndex = 0;
+            _model.SelectedIndex = 0;
             _effort.SelectedIndex = 0;
             _agents.Value = 2;
             _write.Checked = false;
+            if (_catalogReady) _catalogProblem = null;
             UpdateUi();
         };
         _plan.Click += async (_, _) => await LaunchAsync(false);
@@ -379,7 +425,85 @@ public sealed class TaskRouterForm : Form
         _elapsedTimer.Tick += (_, _) => UpdateUi();
         KeyDown += OnShortcutKeyDown;
         FormClosing += OnFormClosing;
-        Shown += (_, _) => (_project.TextLength == 0 ? _project : _task).Focus();
+        Shown += (_, _) =>
+        {
+            (_project.TextLength == 0 ? _project : _task).Focus();
+            _ = RefreshModelsAsync(_initialEffort, _initialModel);
+        };
+    }
+
+    private async Task RefreshModelsAsync(string? preferredEffort = null, string? preferredModel = null)
+    {
+        if (_loadingModels || _cancellation is not null)
+            return;
+        _loadingModels = true;
+        _catalogReady = false;
+        _catalogProblem = null;
+        UpdateUi();
+        try
+        {
+            string selectedModel = preferredModel ?? SelectedModel();
+            string selectedEffort = preferredEffort ?? SelectedEffort();
+            IReadOnlyList<TaskRouterModel> models = await _launcher.LoadModelsAsync(
+                _codexHome(), _modelCancellation.Token);
+            if (IsDisposed) return;
+            _models = models;
+            _model.Items.Clear();
+            _model.Items.Add("Automatisch aus Live-Katalog");
+            foreach (TaskRouterModel model in models)
+                _model.Items.Add(model.Id);
+            int selectedIndex = selectedModel == "auto" ? 0 :
+                models.ToList().FindIndex(model => model.Id == selectedModel) + 1;
+            _model.SelectedIndex = Math.Max(0, selectedIndex);
+            UpdateEffortOptions(selectedEffort);
+            _catalogReady = true;
+            if (selectedModel != "auto" && selectedIndex == 0)
+                _catalogProblem = $"{selectedModel} ist nicht mehr verfügbar. Bitte Modell erneut wählen oder Auto zurücksetzen.";
+            if (selectedEffort != "auto" && SelectedEffort() != selectedEffort)
+                _catalogProblem = $"Denkstufe {selectedEffort} wird nicht mehr angeboten. Bitte Auswahl bestätigen oder Auto zurücksetzen.";
+        }
+        catch (OperationCanceledException) when (_modelCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            if (IsDisposed) return;
+            _catalogProblem = "Modellkatalog nicht verfügbar: " + exception.Message + " Erneut laden.";
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                _loadingModels = false;
+                if (_catalogProblem is not null)
+                    _report.Text = _catalogProblem + "\r\n\r\nKatalog erneut laden und Auswahl prüfen. Der Start bleibt bis dahin gesperrt.";
+                UpdateUi();
+            }
+        }
+    }
+
+    private void UpdateEffortOptions(string? preferred = null)
+    {
+        string requested = preferred ?? SelectedEffort();
+        IEnumerable<string> available = SelectedModel() == "auto"
+            ? _models.SelectMany(model => model.Efforts).Where(effort => effort is not ("max" or "ultra"))
+            : _models.FirstOrDefault(model => model.Id == SelectedModel())?.Efforts ?? [];
+        HashSet<string> supported = available.ToHashSet(StringComparer.Ordinal);
+        _effortCodes.Clear();
+        _effort.Items.Clear();
+        _effortCodes.Add("auto");
+        _effort.Items.Add("Automatisch (empfohlen)");
+        foreach (string effort in TaskRouterPreferences.Efforts.Skip(1))
+        {
+            if (!supported.Contains(effort)) continue;
+            _effortCodes.Add(effort);
+            _effort.Items.Add(EffortLabel(effort));
+        }
+        int index = _effortCodes.IndexOf(requested);
+        _effort.SelectedIndex = index >= 0 ? index : 0;
+        if (index < 0 && requested != "auto" && _catalogReady)
+            _catalogProblem = $"{requested} passt nicht zum Modell. Bitte Denkstufe erneut wählen oder Auto zurücksetzen.";
     }
 
     private static Control PathRow(string label, TextBox field, Button button)
@@ -463,11 +587,21 @@ public sealed class TaskRouterForm : Form
             _write.Checked,
             string.IsNullOrWhiteSpace(_policy.Text) ? null : _policy.Text.Trim(),
             SelectedProfile(),
-            SelectedEffort());
-        if (execute && CanReuseAssessment())
+            SelectedEffort(),
+            Model: SelectedModel());
+        if (execute && CanReuseAssessment() && !CanReuseDecision())
+        {
+            _report.Text = "Projekt, Regeln oder Auswahl haben sich seit der Vorschau geändert. Bitte zuerst «Auswahl prüfen» wählen; die vorhandene Einstufung wird dabei ohne neuen Klassifikationsaufruf verwendet.";
+            _status.Text = "Auswahl erneut prüfen.";
+            _status.ForeColor = Warning;
+            return;
+        }
+        if (CanReuseAssessment() && (execute || !CanReuseDecision()))
         {
             request = request with { AssessmentFile = _cachedAssessment };
         }
+        if (execute && CanReuseDecision())
+            request = request with { ExpectedPlan = _cachedPlan };
         try
         {
             TaskRouterLauncher.Validate(request);
@@ -535,6 +669,7 @@ public sealed class TaskRouterForm : Form
         _startedAtUtc = DateTime.UtcNow;
         _elapsedTimer.Start();
         UpdateUi();
+        _decisionTabs.SelectedIndex = 1;
         _report.Text = execute
             ? TaskRouterLauncher.FormatRequest(request, execute) +
               (request.AssessmentFile is null
@@ -550,18 +685,28 @@ public sealed class TaskRouterForm : Form
             if (!execute && result.ExitCode == 0)
             {
                 string assessment = Path.Combine(result.RunDirectory, "decision", "assessment.json");
-                if (File.Exists(assessment))
+                string plan = Path.Combine(result.RunDirectory, "decision", "plan.json");
+                if (File.Exists(assessment) && File.Exists(plan))
                 {
                     _cachedAssessment = assessment;
                     _cachedAssessmentKey = CurrentAssessmentKey();
+                    _cachedPlan = plan;
+                    _cachedDecisionKey = CurrentDecisionKey();
                 }
+            }
+            string resultPlan = Path.Combine(result.RunDirectory, "decision", "plan.json");
+            if (File.Exists(resultPlan))
+            {
+                _workPlan.Text = TaskRouterLauncher.FormatWorkPlan(await File.ReadAllTextAsync(resultPlan));
+                if (!execute && result.ExitCode == 0) _decisionTabs.SelectedIndex = 0;
             }
             _report.Text = result.Report + "\r\n\r\n" + TaskRouterLauncher.FormatRequest(request, execute);
             if (!string.IsNullOrEmpty(settingsWarning))
             {
                 _report.AppendText("\r\n\r\nHinweis: " + settingsWarning);
             }
-            _status.Text = result.ExitCode == 0 ? "Abgeschlossen." : $"Beendet mit Exit-Code {result.ExitCode}.";
+            _status.Text = result.ExitCode == 0 ? (execute ? "Codex-Prozess beendet; Ergebnis im Codex-Bericht prüfen." : "Einstufung und Plan bereit; Auftrag noch nicht ausgeführt.") :
+                result.ExitCode == 130 ? "Abgebrochen." : $"Beendet mit Exit-Code {result.ExitCode}.";
             _status.ForeColor = result.ExitCode == 0 ? Success : Warning;
         }
         catch (OperationCanceledException)
@@ -636,11 +781,16 @@ public sealed class TaskRouterForm : Form
             input.Enabled = state.InputsEnabled;
         }
         _clearImages.Enabled = state.InputsEnabled && _images.Count > 0;
-        _plan.Enabled = state.CanStart;
-        _run.Enabled = state.CanStart;
+        bool imageModelSupported = _images.Count == 0 || SelectedModel() == "auto" ||
+            _models.Any(model => model.Id == SelectedModel() && model.SupportsImages);
+        bool catalogUsable = _catalogReady && !_loadingModels && _catalogProblem is null && imageModelSupported;
+        _plan.Enabled = state.CanStart && catalogUsable;
+        _run.Enabled = state.CanStart && catalogUsable &&
+                       (!CanReuseAssessment() || CanReuseDecision());
         bool reuseAssessment = CanReuseAssessment();
-        _plan.Text = reuseAssessment ? "Neu einstufen" : "Einstufung ansehen";
-        _run.Text = reuseAssessment ? "Entscheidung starten" : "Mit Codex starten";
+        bool reuseDecision = CanReuseDecision();
+        _plan.Text = reuseDecision ? "Plan erneuern" : reuseAssessment ? "Auswahl prüfen" : "Analyse & Plan";
+        _run.Text = reuseDecision ? "Entscheidung starten" : "Mit Codex starten";
         _toolTip.SetToolTip(_run, reuseAssessment
             ? "Vorhandene Einschätzung verwenden; Live-Modelle und Regeln werden erneut geprüft · Strg+Umschalt+Enter"
             : "Neu einstufen und eine Codex-Sitzung starten · Strg+Umschalt+Enter");
@@ -662,8 +812,12 @@ public sealed class TaskRouterForm : Form
         }
         else if (!preserveStatus)
         {
-            _status.Text = state.StatusText;
-            _status.ForeColor = state.CanStart ? Success : Muted;
+            _status.Text = _loadingModels ? "Live-Modelle werden geladen …" :
+                _catalogProblem ?? (!imageModelSupported ? "Dieses Modell bietet keine bestätigte Bildeingabe. Anderes Modell wählen." :
+                !_catalogReady ? "Live-Modelle noch nicht geladen." :
+                reuseAssessment && !reuseDecision ? "Auswahl geändert · erst Auswahl prüfen." : state.StatusText);
+            _status.ForeColor = _catalogProblem is not null || !imageModelSupported ? Warning :
+                state.CanStart && catalogUsable ? Success : Muted;
         }
     }
 
@@ -678,8 +832,9 @@ public sealed class TaskRouterForm : Form
     private void UpdateWriteHint()
     {
         string selection = SelectedProfile() == "auto" && SelectedEffort() == "auto"
+            && SelectedModel() == "auto"
             ? "Auto optimiert Modell und Denkaufwand über Live-Katalog und Regeln."
-            : $"Vorgabe: {ProfileLabel(SelectedProfile())}, Denkaufwand {EffortLabel(SelectedEffort())}.";
+            : $"Vorgabe: {ProfileLabel(SelectedProfile())}, Modell {SelectedModel()}, Denkaufwand {EffortLabel(SelectedEffort())}.";
         _writeHint.Text = _write.Checked
             ? selection + " Schreibzugriff EIN · nur beauftragte lokale Änderungen; keine Veröffentlichung oder Zusammenführung."
             : selection + " Schreibzugriff AUS.";
@@ -689,24 +844,64 @@ public sealed class TaskRouterForm : Form
     private string SelectedProfile() =>
         TaskRouterPreferences.Profiles[Math.Clamp(_profile.SelectedIndex, 0, TaskRouterPreferences.Profiles.Length - 1)];
 
+    private string SelectedModel() => _model.SelectedIndex <= 0 ? "auto" :
+        _model.SelectedItem?.ToString() ?? "auto";
+
     private string SelectedEffort() =>
-        TaskRouterPreferences.Efforts[Math.Clamp(_effort.SelectedIndex, 0, TaskRouterPreferences.Efforts.Length - 1)];
+        _effortCodes[Math.Clamp(_effort.SelectedIndex, 0, _effortCodes.Count - 1)];
 
     private TaskRouterPreferences CurrentPreferences() =>
-        new(SelectedProfile(), SelectedEffort(), (int)_agents.Value);
+        new(SelectedProfile(), SelectedEffort(), (int)_agents.Value, SelectedModel());
 
     private string CurrentAssessmentKey() =>
-        _task.Text + "\u001f" + string.Join("\u001f", _images.Select(Path.GetFullPath));
+        _task.Text + "\u001f" + ActiveAuthKey() + "\u001f" + string.Join("\u001f", _images.Select(image =>
+            Path.GetFullPath(image) + ":" + SafeModifiedAt(image)));
+
+    private string ActiveAuthKey()
+    {
+        string home = _codexHome();
+        string authFile = Path.Combine(home, "auth.json");
+        try
+        {
+            using FileStream stream = File.OpenRead(authFile);
+            return home + ":" + Convert.ToHexString(SHA256.HashData(stream));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return home + ":Anmeldung nicht lesbar";
+        }
+    }
+
+    private string CurrentDecisionKey() => string.Join("\u001f", CurrentAssessmentKey(),
+        _project.Text.Trim(), _policy.Text.Trim(),
+        SafeModifiedAt(_policy.Text.Trim()),
+        SelectedProfile(), SelectedModel(), SelectedEffort(), _agents.Value, _write.Checked);
+
+    private static long SafeModifiedAt(string path)
+    {
+        try { return File.Exists(path) ? File.GetLastWriteTimeUtc(path).Ticks : 0; }
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
 
     private bool CanReuseAssessment() =>
         _cachedAssessment is not null &&
         File.Exists(_cachedAssessment) &&
         string.Equals(_cachedAssessmentKey, CurrentAssessmentKey(), StringComparison.Ordinal);
 
+    private bool CanReuseDecision() => CanReuseAssessment() && _cachedPlan is not null &&
+        File.Exists(_cachedPlan) &&
+        string.Equals(_cachedDecisionKey, CurrentDecisionKey(), StringComparison.Ordinal);
+
     private void InvalidateCachedAssessment()
     {
+        _workPlan.Text = "Auftrag geändert. Arbeitsplan erneut erstellen.";
         _cachedAssessment = null;
         _cachedAssessmentKey = null;
+        _cachedPlan = null;
+        _cachedDecisionKey = null;
     }
 
     private static string ProfileLabel(string profile) => profile switch

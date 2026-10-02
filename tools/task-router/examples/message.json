@@ -22,6 +22,12 @@
   "acceptance_checks": [
     "Vollständige kurze Nachricht in der angeforderten Sprache."
   ],
+  "plan_steps": [
+    {
+      "action": "Inhalt und Ton der gewünschten Nachricht aus dem Auftrag ableiten.",
+      "verification": "Sprache, Inhalt und Länge mit dem Auftrag abgleichen."
+    }
+  ],
   "evidence": [
     "Simulation: eindeutige kurze Umformulierung ohne Recherche."
   ]
