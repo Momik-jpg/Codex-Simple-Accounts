@@ -63,6 +63,16 @@ public sealed class AccountManagerThemeTests
                     Assert.Contains("68 Prozent frei", Descendants(form).OfType<QuotaMeter>().Single(m => m.Name == "PrimaryQuota1").AccessibleName);
                     Assert.Contains("Keine Daten", Descendants(form).OfType<QuotaMeter>().Single(m => m.Name == "WeeklyQuota3").AccessibleName);
                     Assert.Equal(FormBorderStyle.None, form.FormBorderStyle);
+                    var caption = form.Controls.Cast<Control>().Single(c => c.Name == "AccountWindowCaption");
+                    var content = form.Controls.Cast<Control>().Single(c => c.Name == "AccountContent");
+                    Assert.True(caption.Visible);
+                    Assert.Equal(caption.Bottom, content.Top);
+                    Assert.False(caption.Bounds.IntersectsWith(content.Bounds));
+                    Assert.All(caption.Controls.OfType<RoundedButton>(), button =>
+                    {
+                        Assert.True(button.Visible);
+                        Assert.True(caption.ClientRectangle.Contains(button.Bounds));
+                    });
                     var list = Descendants(form).OfType<ThemedAccountList>().Single();
                     form.Size = form.MinimumSize;
                     Application.DoEvents();
