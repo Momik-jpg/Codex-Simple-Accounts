@@ -93,9 +93,11 @@ def load_policy(path: Path) -> dict[str, Any]:
             and {"version", "priority", "models", "weights", "thresholds",
                  "max_subagents", "max_stagnant_attempts", "notes"} <= set(p)
             and set(p) <= {"version", "priority", "models", "weights", "thresholds",
-                           "max_subagents", "max_stagnant_attempts", "notes", "classifier_models"}
+                           "max_subagents", "max_stagnant_attempts", "notes", "classifier_models",
+                           "auto_model_versions"}
             and isinstance(p["version"], str) and bool(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", p["version"]))
             and p["priority"] == "quality_first"
+            and ("auto_model_versions" not in p or type(p["auto_model_versions"]) is bool)
             and isinstance(p["notes"], str)
             and isinstance(p["models"], dict) and set(p["models"]) == set(TIERS)
             and all(isinstance(p["models"][t], list) and p["models"][t] for t in TIERS)
@@ -156,12 +158,61 @@ def normalize_catalog(raw: Any) -> list[dict[str, Any]]:
     return result
 
 
+def model_version(model_id: str) -> tuple[tuple[int, ...], str] | None:
+    """Recognize release aliases, not dated snapshots, preview names or provider IDs."""
+    match = re.fullmatch(r"gpt-([1-9][0-9]{0,2}(?:\.(?:0|[1-9][0-9]{0,2})){0,2})-([a-z]+)", model_id)
+    if match is None:
+        return None
+    parts = tuple(int(part) for part in match[1].split("."))
+    return parts + (0,) * (3 - len(parts)), match[2]
+
+
+def model_tiers(policy: dict[str, Any], model_id: str) -> list[str]:
+    # Explicit assignments override inherited family assignments.
+    exact = [tier for tier in TIERS if model_id in policy["models"][tier]]
+    version = model_version(model_id)
+    if exact or not policy.get("auto_model_versions", False) or version is None:
+        return exact
+    return [tier for tier in TIERS if any(
+        (seed := model_version(name)) is not None and seed[1] == version[1] and seed[0] <= version[0]
+        for name in policy["models"][tier])]
+
+
+def model_candidates(catalog: list[dict[str, Any]], policy: dict[str, Any], tier: str,
+                     seeds: list[str] | None = None) -> list[str]:
+    """Expand each approved seed to visible release versions, in numeric order."""
+    candidates: list[str] = []
+    for preferred in policy["models"][tier] if seeds is None else seeds:
+        seed = model_version(preferred)
+        if policy.get("auto_model_versions", False) and seed is not None:
+            versions = [(version[0], model["model"]) for model in catalog
+                        if (version := model_version(model["model"])) is not None
+                        and version[1] == seed[1] and version[0] >= seed[0]
+                        and tier in model_tiers(policy, model["model"])]
+            # A seed wins ties with equivalent aliases; catalog order never selects a model.
+            versions.sort(key=lambda item: (item[0], item[1] == preferred, item[1]), reverse=True)
+            candidates.extend(name for _, name in versions)
+        candidates.append(preferred)
+    return list(dict.fromkeys(candidates))
+
+
+def model_selection(model_id: str, policy: dict[str, Any], tier: str) -> dict[str, str]:
+    if model_id in policy["models"][tier]:
+        return {"source": "configured_id", "policy_model": model_id}
+    version = model_version(model_id)
+    for name in policy["models"][tier]:
+        seed = model_version(name)
+        if version is not None and seed is not None and version[1] == seed[1] and version[0] >= seed[0]:
+            return {"source": "live_family_version", "policy_model": name}
+    raise RouterError("Ausgewähltes Modell hat keine nachvollziehbare Regelfreigabe.")
+
+
 def choose_model(catalog: list[dict[str, Any]], policy: dict[str, Any], tier: str,
                  needs_images: bool = False, required_effort: str | None = None,
                  minimum_effort: str = "minimal") -> tuple[dict[str, Any], str]:
     by_id = {x["model"]: x for x in catalog}
     for actual in TIERS[TIERS.index(tier):]:
-        for preferred in policy["models"][actual]:
+        for preferred in model_candidates(catalog, policy, actual):
             model = by_id.get(preferred)
             capable_efforts = [] if model is None else [effort for effort in model["efforts"]
                 if EFFORTS.index(effort) >= EFFORTS.index(minimum_effort) and
@@ -211,7 +262,7 @@ def choose_manual_model(catalog: list[dict[str, Any]], policy: dict[str, Any],
                           "Katalog neu laden und erneut wählen.")
     if needs_images and "image" not in model["modalities"]:
         raise RouterError(f"{model_id} unterstützt laut Live-Katalog keine Bildeingabe.")
-    tiers = [tier for tier in TIERS if model_id in policy["models"][tier]]
+    tiers = model_tiers(policy, model_id)
     if not tiers:
         raise RouterError(f"{model_id} ist keiner Qualitätsstufe in routing_policy.json zugeordnet. "
                           "Modell dort bewusst zuordnen oder Auto wählen.")
@@ -225,13 +276,14 @@ def choose_manual_model(catalog: list[dict[str, Any]], policy: dict[str, Any],
 def choose_classifier_model(catalog: list[dict[str, Any]],
                             policy: dict[str, Any], needs_images: bool) -> tuple[dict[str, Any], str, str | None]:
     by_id = {model["model"]: model for model in catalog}
-    primary = policy.get("classifier_models", policy["models"]["balanced"])
+    primary = model_candidates(catalog, policy, "balanced",
+                               policy.get("classifier_models", policy["models"]["balanced"]))
     # Fast tier is the configured cost preference after the primary Sol-class list.
     candidates = [("balanced", primary, True),
-                  ("fast", policy["models"]["fast"], False),
-                  ("balanced", [name for name in policy["models"]["balanced"]
+                  ("fast", model_candidates(catalog, policy, "fast"), False),
+                  ("balanced", [name for name in model_candidates(catalog, policy, "balanced")
                                 if name not in primary], False),
-                  ("deep", policy["models"]["deep"], False)]
+                  ("deep", model_candidates(catalog, policy, "deep"), False)]
     for tier, preferred_models, is_primary in candidates:
         for preferred in preferred_models:
             model = by_id.get(preferred)
@@ -328,6 +380,11 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
                                  explicit=effort_preference != "auto" and desired == effort_preference)
     if note:
         reasons.append(note)
+    selection = model_selection(model["model"], p, actual_tier)
+    if selection["source"] == "live_family_version":
+        reasons.append(f"Live-Modellversion {model['model']}: Familienfreigabe von "
+                       f"{selection['policy_model']} ({actual_tier}); numerische Versionspräferenz, "
+                       "kein gemessener Leistungsvorteil.")
     agents: list[dict[str, Any]] = []
     limit = min(max(cap, 0), p["max_subagents"])
     for c in a["parallel_candidates"]:
@@ -341,7 +398,7 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
         agent_tier = "fast" if c["role"] == "routine" else "balanced"
         try:
             agent_effort = "medium" if c["role"] == "routine" else "high"
-            m, _ = choose_model(catalog, p, agent_tier,
+            m, selected_agent_tier = choose_model(catalog, p, agent_tier,
                                 needs_images and c["role"] == "review",
                                 minimum_effort=agent_effort)
             e, n = choose_effort(m, agent_effort, agent_effort)
@@ -351,6 +408,7 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
         agents.append({"name": f"router_{c['role']}_{len(agents) + 1}",
                        "role": c["role"], "objective": c["objective"], "stage": c["stage"],
                        "model": m["model"], "effort": e, "read_only": True,
+                       "model_selection": model_selection(m["model"], p, selected_agent_tier),
                        "effort_note": n})
     return {"status": "ready", "goal": a["goal"], "task_type": a["task_type"], "score": score,
             "workload": a["workload"], "confidence": a["confidence"],
@@ -361,6 +419,7 @@ def decide(a: dict[str, Any], catalog: list[dict[str, Any]], p: dict[str, Any],
             "evaluation": [{"dimension": k, "score": s[k], "weight": w, "points": s[k] * w}
                            for k, w in p["weights"].items()],
             "model": model["model"], "effort": effort, "agents": agents,
+            "model_selection": selection,
             "max_concurrent_subagents": len(agents), "reasons": reasons,
             "acceptance_checks": a["acceptance_checks"], "evidence": a["evidence"],
             "plan_steps": a["plan_steps"],
