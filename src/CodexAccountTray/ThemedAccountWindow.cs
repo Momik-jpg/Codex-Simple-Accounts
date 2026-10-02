@@ -5,7 +5,7 @@ namespace CodexAccountTray;
 /// <summary>Theme-owned window chrome; resizing and dragging still use Windows messages.</summary>
 public class ThemedAccountWindow : Form
 {
-    private readonly Panel _caption = new() { Dock = DockStyle.Top, Height = 38 };
+    private readonly Panel _caption = new() { Name = "AccountWindowCaption", Dock = DockStyle.Top, Height = 38 };
     private readonly Label _captionText = new() { AutoSize = true, Location = new Point(15, 10) };
     private readonly RoundedButton _minimize;
     private readonly RoundedButton _maximize;
