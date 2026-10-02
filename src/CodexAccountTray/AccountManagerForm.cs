@@ -162,7 +162,7 @@ public sealed class AccountManagerForm : ThemedAccountWindow
     {
         var root = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, Padding = new Padding(28), ColumnCount = 1, RowCount = 5,
+            Name = "AccountContent", Dock = DockStyle.Fill, Padding = new Padding(28), ColumnCount = 1, RowCount = 5,
             BackColor = _palette.Background
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -172,6 +172,7 @@ public sealed class AccountManagerForm : ThemedAccountWindow
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
         Controls.Add(root);
+        root.BringToFront(); // Dock Fill after the inherited caption has reserved its height.
         var header = new Panel { Dock = DockStyle.Fill };
         header.Controls.Add(new Label { Text = "Deine Konten.", AutoSize = true,
             Font = new Font("Segoe UI", 27, FontStyle.Bold), Location = new Point(0, 0) });
