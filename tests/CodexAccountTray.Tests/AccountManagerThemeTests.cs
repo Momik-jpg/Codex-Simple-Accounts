@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows.Forms;
 using Xunit;
@@ -61,6 +62,20 @@ public sealed class AccountManagerThemeTests
                     }
                     Assert.Contains("68 Prozent frei", Descendants(form).OfType<QuotaMeter>().Single(m => m.Name == "PrimaryQuota1").AccessibleName);
                     Assert.Contains("Keine Daten", Descendants(form).OfType<QuotaMeter>().Single(m => m.Name == "WeeklyQuota3").AccessibleName);
+                    Assert.Equal(FormBorderStyle.None, form.FormBorderStyle);
+                    var list = Descendants(form).OfType<ThemedAccountList>().Single();
+                    form.Size = form.MinimumSize;
+                    Application.DoEvents();
+                    list.ScrollTo(int.MaxValue);
+                    Assert.True(list.ScrollOffset > 0);
+                    Assert.True(cards.Max(c => c.Bottom) <= list.Viewport.Height);
+                    list.ScrollTo(0);
+                    Assert.Equal(0, cards.Min(c => c.Top));
+                    Point wheelPoint = list.Viewport.PointToScreen(new Point(10, 10));
+                    nint wheelCoordinates = unchecked((nint)((wheelPoint.X & 0xffff) | (wheelPoint.Y << 16)));
+                    SendMessage(list.Viewport.Handle, 0x20A, (nint)(-120 << 16), wheelCoordinates);
+                    Assert.True(list.ScrollOffset > 0);
+                    list.ScrollTo(0);
                     SaveImage(form, $"accounts-{theme}.png");
                     form.Size = form.MinimumSize;
                     Application.DoEvents();
@@ -71,6 +86,17 @@ public sealed class AccountManagerThemeTests
                 }
                 Assert.True(settings.Load().AutoSwitchEnabled);
                 Assert.Equal("balanced", settings.Load().RouterProfile);
+                Point edge = form.PointToScreen(new Point(form.ClientSize.Width - 2, form.ClientSize.Height - 2));
+                nint coordinates = unchecked((nint)((edge.X & 0xffff) | (edge.Y << 16)));
+                Assert.Equal((nint)17, SendMessage(form.Handle, 0x84, 0, coordinates));
+                var maximize = Descendants(form).OfType<RoundedButton>().Single(b => b.Name == "WindowMaximize");
+                maximize.PerformClick();
+                Assert.Equal(FormWindowState.Maximized, form.WindowState);
+                maximize.PerformClick();
+                Assert.Equal(FormWindowState.Normal, form.WindowState);
+                Descendants(form).OfType<RoundedButton>().Single(b => b.Name == "WindowMinimize").PerformClick();
+                Assert.Equal(FormWindowState.Minimized, form.WindowState);
+                form.WindowState = FormWindowState.Normal;
                 process.Pending = 2;
                 form.RefreshView();
                 Assert.All(Descendants(form).OfType<AccountCardPanel>().SelectMany(c => c.Controls.OfType<RoundedButton>()).Where(b => b.Text != "···"), b => Assert.False(b.Enabled));
@@ -78,6 +104,9 @@ public sealed class AccountManagerThemeTests
                 process.Running = true;
                 form.RefreshView();
                 Assert.All(Descendants(form).OfType<AccountCardPanel>().SelectMany(c => c.Controls.OfType<RoundedButton>()).Where(b => b.Text != "···"), b => Assert.False(b.Enabled));
+                Descendants(form).OfType<RoundedButton>().Single(b => b.Name == "WindowClose").PerformClick();
+                Assert.False(form.Visible);
+                Assert.False(form.IsDisposed);
             }
             catch (Exception exception) { failure = exception; }
             finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -105,8 +134,15 @@ public sealed class AccountManagerThemeTests
         Directory.CreateDirectory(artifacts);
         using var bitmap = new Bitmap(form.Width, form.Height);
         form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+        Assert.Equal(form.BackColor.ToArgb(), bitmap.GetPixel(2, 2).ToArgb());
+        var list = Descendants(form).OfType<ThemedAccountList>().Single();
+        Point rail = form.PointToClient(list.PointToScreen(new Point(list.Width - 1, list.Height / 2)));
+        Assert.Equal(form.BackColor.ToArgb(), bitmap.GetPixel(rail.X, rail.Y).ToArgb());
         bitmap.Save(Path.Combine(artifacts, name), ImageFormat.Png);
     }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint SendMessage(nint window, uint message, nint wParam, nint lParam);
 
     private sealed class FixtureProtocol : ICodexProtocolClient
     {
