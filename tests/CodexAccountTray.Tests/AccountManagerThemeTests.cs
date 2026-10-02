@@ -86,11 +86,13 @@ public sealed class AccountManagerThemeTests
                     SendMessage(list.Viewport.Handle, 0x20A, (nint)(-120 << 16), wheelCoordinates);
                     Assert.True(list.ScrollOffset > 0);
                     list.ScrollTo(0);
-                    SaveImage(form, $"accounts-{theme}.png");
+                    SaveImage(form, $"accounts-{theme}-compact.png");
                     form.Size = form.MinimumSize;
                     Application.DoEvents();
                     Assert.All(cards, card => Assert.All(card.Controls.Cast<Control>(), child => Assert.True(card.ClientRectangle.Contains(child.Bounds))));
                     form.ClientSize = new Size(1200, 800);
+                    Application.DoEvents();
+                    SaveImage(form, $"accounts-{theme}.png");
                     Descendants(form).OfType<RoundedButton>().Single(b => b.Name == "ThemeToggle").PerformClick();
                     Application.DoEvents();
                 }
