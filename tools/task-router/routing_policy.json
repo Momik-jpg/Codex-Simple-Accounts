@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "priority": "quality_first",
+  "models": {
+    "fast": ["gpt-6-luna", "gpt-5.6-luna"],
+    "balanced": ["gpt-6-sol", "gpt-5.6-sol"],
+    "deep": ["gpt-6-astra"]
+  },
+  "weights": {"reasoning": 2, "ambiguity": 1, "coupling": 1, "visual": 2, "failure_impact": 1, "verification_difficulty": 1},
+  "thresholds": {"fast_max": 5, "balanced_max": 13},
+  "max_subagents": 2,
+  "max_stagnant_attempts": 3,
+  "notes": "Eigene Startheuristik, kein validierter Leistungsbenchmark. Modell-IDs sind konfigurierbare Präferenzen, keine Verfügbarkeitsbehauptung. Nur Einträge aus dem aktuellen model/list-Katalog dürfen ausgeführt werden. Kein automatisches max/ultra."
+}

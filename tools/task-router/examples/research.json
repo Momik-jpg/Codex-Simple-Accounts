@@ -1,0 +1,46 @@
+{
+  "goal": "Technische Alternativen anhand von Primärquellen und Gegenbelegen vergleichen.",
+  "task_type": "research",
+  "scores": {
+    "reasoning": 3,
+    "ambiguity": 2,
+    "coupling": 1,
+    "visual": 0,
+    "failure_impact": 1,
+    "verification_difficulty": 2
+  },
+  "workload": "L",
+  "confidence": "high",
+  "inverse_visual_reconstruction": false,
+  "shared_mutable_artifact": false,
+  "requires_images": false,
+  "read_only_task": true,
+  "stagnant_attempts": 0,
+  "stall_cause": "none",
+  "blocking_reason": "",
+  "parallel_candidates": [
+    {
+      "objective": "Dokumentierte Eigenschaften in Primärquellen prüfen.",
+      "independent": true,
+      "shared_writes": false,
+      "benefit": "clear",
+      "stage": "now",
+      "role": "research"
+    },
+    {
+      "objective": "Unabhängige Gegenbelege und Grenzen untersuchen.",
+      "independent": true,
+      "shared_writes": false,
+      "benefit": "clear",
+      "stage": "now",
+      "role": "research"
+    }
+  ],
+  "acceptance_checks": [
+    "Tragende Aussagen an geöffneten Primärquellen belegen.",
+    "Widersprüche erklären oder als offen kennzeichnen."
+  ],
+  "evidence": [
+    "Simulation einer breiten technischen Recherche mit zwei getrennten Fragen."
+  ]
+}

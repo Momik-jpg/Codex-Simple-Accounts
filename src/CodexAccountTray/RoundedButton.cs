@@ -8,6 +8,7 @@ public sealed class RoundedButton : Button
     private Color _normalColor;
     private int _cornerRadius = 10;
     private bool _pressed;
+    private bool _hovered;
 
     public RoundedButton()
     {
@@ -16,6 +17,7 @@ public sealed class RoundedButton : Button
         UseVisualStyleBackColor = false;
         Cursor = Cursors.Hand;
         TabStop = true;
+        AccessibleRole = AccessibleRole.PushButton;
         SetStyle(
             ControlStyles.UserPaint |
             ControlStyles.AllPaintingInWmPaint |
@@ -51,7 +53,11 @@ public sealed class RoundedButton : Button
         using GraphicsPath path = CreateRoundedPath(bounds, CornerRadius);
         Color fill = !Enabled
             ? Color.FromArgb(45, 48, 51)
-            : _normalColor;
+            : _pressed
+                ? Blend(_normalColor, Color.Black, 0.18f)
+                : _hovered || Focused
+                    ? Blend(_normalColor, Color.White, 0.10f)
+                    : _normalColor;
         using var brush = new SolidBrush(fill);
         eventArgs.Graphics.FillPath(brush, path);
         Rectangle textBounds = _pressed
@@ -81,6 +87,13 @@ public sealed class RoundedButton : Button
         Invalidate();
     }
 
+    protected override void OnMouseEnter(EventArgs eventArgs)
+    {
+        base.OnMouseEnter(eventArgs);
+        _hovered = true;
+        Invalidate();
+    }
+
     protected override void OnMouseUp(MouseEventArgs eventArgs)
     {
         base.OnMouseUp(eventArgs);
@@ -91,8 +104,57 @@ public sealed class RoundedButton : Button
     protected override void OnMouseLeave(EventArgs eventArgs)
     {
         base.OnMouseLeave(eventArgs);
+        _hovered = false;
         _pressed = false;
         Invalidate();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs eventArgs)
+    {
+        base.OnKeyDown(eventArgs);
+        if (eventArgs.KeyCode is Keys.Space or Keys.Enter)
+        {
+            _pressed = true;
+            Invalidate();
+        }
+    }
+
+    protected override void OnKeyUp(KeyEventArgs eventArgs)
+    {
+        base.OnKeyUp(eventArgs);
+        if (eventArgs.KeyCode is Keys.Space or Keys.Enter)
+        {
+            _pressed = false;
+            Invalidate();
+        }
+    }
+
+    protected override void OnGotFocus(EventArgs eventArgs)
+    {
+        base.OnGotFocus(eventArgs);
+        Invalidate();
+    }
+
+    protected override void OnLostFocus(EventArgs eventArgs)
+    {
+        base.OnLostFocus(eventArgs);
+        _pressed = false;
+        Invalidate();
+    }
+
+    protected override void OnEnabledChanged(EventArgs eventArgs)
+    {
+        base.OnEnabledChanged(eventArgs);
+        Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+        Invalidate();
+    }
+
+    private static Color Blend(Color from, Color to, float amount)
+    {
+        int red = (int)Math.Round(from.R + (to.R - from.R) * amount);
+        int green = (int)Math.Round(from.G + (to.G - from.G) * amount);
+        int blue = (int)Math.Round(from.B + (to.B - from.B) * amount);
+        return Color.FromArgb(from.A, red, green, blue);
     }
 
     private static GraphicsPath CreateRoundedPath(Rectangle rectangle, int radius)

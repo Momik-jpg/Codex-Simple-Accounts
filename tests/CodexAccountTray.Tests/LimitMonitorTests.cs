@@ -131,6 +131,38 @@ public sealed class LimitMonitorTests
         }
     }
 
+    [Fact]
+    public async Task RefreshAsync_ReportsRejectedAutomaticSwitchWithoutFailingRefresh()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"CodexMonitor-{Guid.NewGuid():N}");
+        var paths = new AppPaths(root);
+        var store = new AccountStore(paths);
+        store.Save(1, Encoding.UTF8.GetBytes("account-1"));
+        store.Save(2, Encoding.UTF8.GetBytes("account-2"));
+        var protocol = new FakeProtocolClient(new Dictionary<int, int> { [1] = 1, [2] = 80 });
+        var process = new FakeProcessManager
+        {
+            LastAccount = 1,
+            StartException = new InvalidOperationException("Während einer Auto-Aufgabe gesperrt.")
+        };
+        var monitor = new LimitMonitor(paths, store, protocol, process, TimeSpan.FromMinutes(9), () => true);
+        string? notice = null;
+        monitor.Notice += (_, message) => notice = message;
+
+        try
+        {
+            await monitor.RefreshAsync(CancellationToken.None);
+
+            Assert.Null(process.StartedAccount);
+            Assert.Contains("nicht ausgeführt", notice);
+            Assert.Contains("Auto-Aufgabe", notice);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private sealed class FakeProtocolClient(
         IReadOnlyDictionary<int, int> primaryRemaining,
         IReadOnlyDictionary<int, int>? secondaryRemaining = null) : ICodexProtocolClient
@@ -156,12 +188,17 @@ public sealed class LimitMonitorTests
         public string ActiveCodexHome => string.Empty;
         public int? StartedAccount { get; private set; }
         public bool ResumedLast { get; private set; }
+        public Exception? StartException { get; set; }
         public event EventHandler? ProcessExited;
 
         public void RaiseProcessExited() => ProcessExited?.Invoke(this, EventArgs.Empty);
 
         public Task StartAsync(int accountNumber, bool resumeLast, CancellationToken cancellationToken)
         {
+            if (StartException is not null)
+            {
+                return Task.FromException(StartException);
+            }
             StartedAccount = accountNumber;
             ResumedLast = resumeLast;
             LastAccount = accountNumber;

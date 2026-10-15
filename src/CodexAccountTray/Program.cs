@@ -24,24 +24,29 @@ static class Program
             CodexCommand command = CodexLocator.Find();
             string codexHome = Path.Combine(WindowsUserProfile.ProfilePath(), ".codex");
             var desktopRuntime = new ProxyDesktopRuntime();
+            var taskRouterActivity = new TaskRouterActivity();
             using var processManager = new SmoothCodexProcessManager(
                 accountStore,
                 command,
                 codexHome,
-                desktopRuntime);
+                desktopRuntime,
+                taskRouterActivity);
             var protocolClient = new CodexProtocolClient(command);
             var loginService = new AccountLoginService(
                 paths,
                 accountStore,
                 command,
-                showConsole: false);
+                showConsole: false,
+                taskRouterActivity: taskRouterActivity);
             using var monitor = new LimitMonitor(
                 paths,
                 accountStore,
                 protocolClient,
                 processManager,
                 TimeSpan.FromSeconds(30),
-                () => settingsStore.Load().AutoSwitchEnabled);
+                () => settingsStore.Load().AutoSwitchEnabled && !taskRouterActivity.IsBusy);
+            Action<Form> openTaskRouter = TaskRouterIntegration.CreateOpenHandler(
+                command, processManager, settingsStore, taskRouterActivity);
             using var context = new TrayApplicationContext(
                 accountStore,
                 loginService,
@@ -49,7 +54,10 @@ static class Program
                 monitor,
                 settingsStore,
                 isChatGptRunning: () => desktopRuntime.IsRunning,
-                showOnStart: LaunchMode.ShouldShow(args));
+                showOnStart: LaunchMode.ShouldShow(args),
+                taskRouterActivity: taskRouterActivity,
+                openTaskRouter: openTaskRouter);
+            TaskRouterIntegration.Attach(context.MainForm!, openTaskRouter);
             Application.Run(context);
         }
         catch (Exception exception)

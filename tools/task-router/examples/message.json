@@ -1,0 +1,28 @@
+{
+  "goal": "Kurze Nachricht auf Englisch formulieren.",
+  "task_type": "writing",
+  "scores": {
+    "reasoning": 0,
+    "ambiguity": 0,
+    "coupling": 0,
+    "visual": 0,
+    "failure_impact": 0,
+    "verification_difficulty": 0
+  },
+  "workload": "XS",
+  "confidence": "high",
+  "inverse_visual_reconstruction": false,
+  "shared_mutable_artifact": false,
+  "requires_images": false,
+  "read_only_task": true,
+  "stagnant_attempts": 0,
+  "stall_cause": "none",
+  "blocking_reason": "",
+  "parallel_candidates": [],
+  "acceptance_checks": [
+    "Vollständige kurze Nachricht in der angeforderten Sprache."
+  ],
+  "evidence": [
+    "Simulation: eindeutige kurze Umformulierung ohne Recherche."
+  ]
+}

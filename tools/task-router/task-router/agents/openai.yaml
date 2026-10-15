@@ -1,0 +1,6 @@
+interface:
+  display_name: "Task Router"
+  short_description: "Modell, Denkaufwand und Nebenagenten zuordnen"
+  default_prompt: "Nutze $task-router für diesen Auftrag und führe die erlaubte Arbeit mit passender Konfiguration aus."
+policy:
+  allow_implicit_invocation: true

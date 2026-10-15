@@ -1,0 +1,41 @@
+{
+  "goal": "UMR-Ozelot anhand der Referenz rekonstruieren, ausgehend von Version 188.",
+  "task_type": "visual",
+  "scores": {
+    "reasoning": 3,
+    "ambiguity": 2,
+    "coupling": 3,
+    "visual": 3,
+    "failure_impact": 1,
+    "verification_difficulty": 2
+  },
+  "workload": "XL",
+  "confidence": "medium",
+  "inverse_visual_reconstruction": true,
+  "shared_mutable_artifact": true,
+  "requires_images": true,
+  "read_only_task": false,
+  "stagnant_attempts": 0,
+  "stall_cause": "unknown",
+  "blocking_reason": "",
+  "parallel_candidates": [
+    {
+      "objective": "Stabilen gespeicherten Stand auf Export-/Rig-Regressionen prüfen.",
+      "independent": true,
+      "shared_writes": false,
+      "benefit": "clear",
+      "stage": "after_checkpoint",
+      "role": "review"
+    }
+  ],
+  "acceptance_checks": [
+    "Referenz und Render unter gleicher Kamera vergleichen.",
+    "Betroffene Export-, Rig- und Animationsprüfungen bestehen.",
+    "Unbeobachtbare Geometrie als Annahme kennzeichnen."
+  ],
+  "evidence": [
+    "Synthetischer Test: eine hohe Versionsnummer ist kein Stagnationsnachweis.",
+    "Auftrag beinhaltet visuell-räumliche Rekonstruktion; Einstufung ist ein Beispiel.",
+    "188 ist eine Versionsnummer, kein belegter Fehlversuchszähler."
+  ]
+}

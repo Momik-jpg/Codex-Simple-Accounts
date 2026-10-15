@@ -21,6 +21,11 @@
     <EmbeddedResource Include="..\..\assets\Codex-Konten.ico"
                       Link="Assets\Codex-Konten.ico"
                       LogicalName="CodexAccountTray.AppIcon.ico" />
+    <Content Include="..\..\tools\task-router\**\*"
+             Exclude="..\..\tools\task-router\**\__pycache__\**;..\..\tools\task-router\**\*.pyc"
+             Link="TaskRouter\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
