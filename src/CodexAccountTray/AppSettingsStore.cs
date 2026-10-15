@@ -29,18 +29,37 @@ public sealed class AppSettingsStore
     {
         if (!File.Exists(_settingsFile))
         {
-            return new AppSettings(WindowsUserProfile.Desktop());
+            return CreateDefaultSettings();
         }
 
-        AppSettings settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_settingsFile))
-            ?? new AppSettings(WindowsUserProfile.Desktop());
-        TaskRouterPreferences router = settings.RouterPreferences;
-        return settings with
+        try
         {
-            RouterProfile = router.Profile,
-            RouterEffort = router.Effort,
-            RouterMaxSubagents = router.MaxSubagents
-        };
+            AppSettings settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_settingsFile))
+                ?? CreateDefaultSettings();
+            TaskRouterPreferences router = settings.RouterPreferences;
+            return settings with
+            {
+                RouterProfile = router.Profile,
+                RouterEffort = router.Effort,
+                RouterMaxSubagents = router.MaxSubagents
+            };
+        }
+        catch (JsonException)
+        {
+            PreserveCorruptSettingsFile();
+            return CreateDefaultSettings();
+        }
+    }
+
+    private static AppSettings CreateDefaultSettings()
+    {
+        return new AppSettings(WindowsUserProfile.Desktop());
+    }
+
+    private void PreserveCorruptSettingsFile()
+    {
+        string backupFile = $"{_settingsFile}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.bak";
+        File.Move(_settingsFile, backupFile);
     }
 
     public void Save(AppSettings settings)
