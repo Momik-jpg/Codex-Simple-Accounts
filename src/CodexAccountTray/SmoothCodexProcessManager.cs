@@ -7,6 +7,7 @@ public interface ISmoothSwitchControl
 {
     bool ProxyActive { get; }
     bool HasActiveTurn { get; }
+    bool IsDesktopRunning { get; }
     Task EmergencyStopAsync(CancellationToken cancellationToken);
     Task LogoutAsync(int accountNumber, CancellationToken cancellationToken);
     void SynchronizeActiveAccount();
@@ -28,7 +29,7 @@ public sealed class ProxyDesktopRuntime : IProxyDesktopRuntime
     {
         get
         {
-            Process[] processes = Process.GetProcessesByName("ChatGPT");
+            Process[] processes = CodexDesktopRuntime.FindCodexProcesses();
             try
             {
                 return processes.Length > 0;
@@ -53,7 +54,7 @@ public sealed class ProxyDesktopRuntime : IProxyDesktopRuntime
 
     public async Task CloseAsync(CancellationToken cancellationToken)
     {
-        Process[] processes = Process.GetProcessesByName("ChatGPT");
+        Process[] processes = CodexDesktopRuntime.FindCodexProcesses();
         try
         {
             foreach (Process process in processes)
@@ -89,7 +90,7 @@ public sealed class ProxyDesktopRuntime : IProxyDesktopRuntime
         {
         }
 
-        processes = Process.GetProcessesByName("ChatGPT");
+        processes = CodexDesktopRuntime.FindCodexProcesses();
         try
         {
             foreach (Process process in processes)
@@ -172,6 +173,7 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
     public string ActiveCodexHome { get; }
     public bool ProxyActive => false;
     public bool HasActiveTurn => false;
+    public bool IsDesktopRunning => _desktop.IsRunning;
     public event EventHandler? ProcessExited;
 
     public async Task StartAsync(int accountNumber, bool resumeLast, CancellationToken cancellationToken)
@@ -195,6 +197,7 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
             gateAcquired = true;
             try
             {
+                RefreshActiveAccountFromDisk();
                 if (_desktop.IsRunning && ActiveAccount == accountNumber)
                 {
                     return;
@@ -232,10 +235,16 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
 
     public void SynchronizeActiveAccount()
     {
-        int? detected = _store.FindByAuthFile(Path.Combine(ActiveCodexHome, "auth.json"));
-        ActiveAccount = detected;
-        LastAccount = detected;
-        ProcessExited?.Invoke(this, EventArgs.Empty);
+        if (!_gate.Wait(0)) return;
+        try
+        {
+            if (RefreshActiveAccountFromDisk())
+                ProcessExited?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     public async Task EmergencyStopAsync(CancellationToken cancellationToken)
@@ -260,6 +269,7 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
     public async Task LogoutAsync(int accountNumber, CancellationToken cancellationToken)
     {
         using IDisposable? accountChange = _taskRouterActivity?.BeginAccountChange();
+        SynchronizeActiveAccount();
         bool removeActiveAuth = ActiveAccount == accountNumber;
         if (removeActiveAuth || PendingAccount == accountNumber)
         {
@@ -287,12 +297,13 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
         if (removeActiveAuth)
         {
             string authFile = Path.Combine(ActiveCodexHome, "auth.json");
-            if (File.Exists(authFile))
+            if (File.Exists(authFile) && _store.FindByAuthFile(authFile) == accountNumber)
             {
                 File.Delete(authFile);
             }
         }
         _store.Remove(accountNumber);
+        SynchronizeActiveAccount();
         ProcessExited?.Invoke(this, EventArgs.Empty);
     }
 
@@ -307,24 +318,20 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
     {
         Directory.CreateDirectory(ActiveCodexHome);
         string authFile = Path.Combine(ActiveCodexHome, "auth.json");
+        RefreshActiveAccountFromDisk();
         int? previousAccount = ActiveAccount;
-        if (ActiveAccount is int previous && File.Exists(authFile))
-        {
-            byte[] currentCredential = await File.ReadAllBytesAsync(authFile, cancellationToken);
-            try
-            {
-                _store.Save(previous, currentCredential);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(currentCredential);
-            }
-        }
+        byte[]? previousCredential = File.Exists(authFile)
+            ? await File.ReadAllBytesAsync(authFile, cancellationToken)
+            : null;
         string temporary = authFile + ".codex-konten.tmp";
-        await WriteStoredCredentialAsync(accountNumber, temporary, cancellationToken);
-        File.Move(temporary, authFile, true);
+        bool launchAttempted = false;
         try
         {
+            if (previousAccount is int previous && previousCredential is not null)
+                _store.Save(previous, previousCredential);
+            await WriteStoredCredentialAsync(accountNumber, temporary, cancellationToken);
+            File.Move(temporary, authFile, true);
+            launchAttempted = true;
             _desktop.Launch();
             using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             startup.CancelAfter(TimeSpan.FromSeconds(30));
@@ -332,36 +339,49 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
             {
                 await Task.Delay(250, startup.Token);
             }
+            int? verified = _store.FindByAuthFile(authFile);
+            if (verified != accountNumber)
+                throw new InvalidOperationException("Das ausgewählte Konto konnte nicht verifiziert werden.");
+            ActiveAccount = accountNumber;
+            LastAccount = accountNumber;
         }
         catch (Exception exception)
         {
-            if (previousAccount is int oldAccount)
+            if (launchAttempted && _desktop.IsRunning)
             {
-                await WriteStoredCredentialAsync(oldAccount, temporary, CancellationToken.None);
-                File.Move(temporary, authFile, true);
+                try
+                {
+                    await _desktop.CloseAsync(CancellationToken.None);
+                }
+                catch (Exception closeFailure)
+                {
+                    throw new InvalidOperationException(
+                        "Codex konnte nach dem Kontowechsel nicht beendet werden. Die Anmeldung wurde aus Sicherheitsgründen nicht zurückgeschrieben; bitte die App schliessen und das Konto prüfen.",
+                        new AggregateException(exception, closeFailure));
+                }
             }
+            await RestorePreviousCredentialAsync(previousCredential, authFile, temporary);
             throw new InvalidOperationException(
-                "ChatGPT konnte nach dem Kontowechsel nicht normal gestartet werden.", exception);
+                "Codex konnte nach dem Kontowechsel nicht normal gestartet werden. Die bisherige Anmeldung wurde wiederhergestellt.",
+                exception);
         }
-
-        int? verified = _store.FindByAuthFile(authFile);
-        if (verified != accountNumber)
+        finally
         {
-            await RestorePreviousCredentialAsync(previousAccount, authFile, temporary);
-            throw new InvalidOperationException("Das ausgewählte Konto konnte nicht verifiziert werden.");
+            if (previousCredential is not null)
+                CryptographicOperations.ZeroMemory(previousCredential);
+            if (File.Exists(temporary))
+                File.Delete(temporary);
         }
-        ActiveAccount = accountNumber;
-        LastAccount = accountNumber;
     }
 
     private async Task RestorePreviousCredentialAsync(
-        int? previousAccount,
+        byte[]? previousCredential,
         string authFile,
         string temporary)
     {
-        if (previousAccount is int oldAccount)
+        if (previousCredential is not null)
         {
-            await WriteStoredCredentialAsync(oldAccount, temporary, CancellationToken.None);
+            await File.WriteAllBytesAsync(temporary, previousCredential, CancellationToken.None);
             File.Move(temporary, authFile, true);
         }
         else if (File.Exists(authFile))
@@ -384,5 +404,15 @@ public sealed class SmoothCodexProcessManager : ICodexProcessManager, ISmoothSwi
         {
             CryptographicOperations.ZeroMemory(credential);
         }
+    }
+
+    private bool RefreshActiveAccountFromDisk()
+    {
+        int? detected = _store.FindByAuthFile(Path.Combine(ActiveCodexHome, "auth.json"));
+        if (ActiveAccount == detected && LastAccount == detected)
+            return false;
+        ActiveAccount = detected;
+        LastAccount = detected;
+        return true;
     }
 }

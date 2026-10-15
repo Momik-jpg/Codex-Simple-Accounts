@@ -17,6 +17,7 @@ public sealed class AppSettingsStoreTests
             Assert.Equal("C:\\Projekt", store.Load().ProjectFolder);
             Assert.True(store.Load().AutoSwitchEnabled);
             Assert.Equal("auto", store.Load().RouterProfile);
+            Assert.Equal("auto", store.Load().RouterModel);
             Assert.Equal(2, store.Load().RouterMaxSubagents);
         }
         finally
@@ -38,6 +39,7 @@ public sealed class AppSettingsStoreTests
 
             Assert.False(settings.AutoSwitchEnabled);
             Assert.Equal("auto", settings.RouterProfile);
+            Assert.Equal("auto", settings.RouterModel);
             Assert.Equal("auto", settings.RouterEffort);
             Assert.Equal(2, settings.RouterMaxSubagents);
         }
@@ -55,11 +57,12 @@ public sealed class AppSettingsStoreTests
         try
         {
             File.WriteAllText(Path.Combine(root, "settings.json"),
-                "{\"ProjectFolder\":\"C:\\\\Projekt\",\"RouterProfile\":\"turbo\",\"RouterEffort\":\"huge\",\"RouterMaxSubagents\":9}");
+                "{\"ProjectFolder\":\"C:\\\\Projekt\",\"RouterProfile\":\"turbo\",\"RouterModel\":\"invalid model; command\",\"RouterEffort\":\"huge\",\"RouterMaxSubagents\":9}");
 
             AppSettings settings = new AppSettingsStore(new AppPaths(root)).Load();
 
             Assert.Equal("auto", settings.RouterProfile);
+            Assert.Equal("auto", settings.RouterModel);
             Assert.Equal("auto", settings.RouterEffort);
             Assert.Equal(2, settings.RouterMaxSubagents);
         }
@@ -80,6 +83,7 @@ public sealed class AppSettingsStoreTests
             store.Save(new AppSettings("C:\\Projekt")
             {
                 RouterProfile = "deep",
+                RouterModel = "gpt-5.5",
                 RouterEffort = "xhigh",
                 RouterMaxSubagents = 1
             });
@@ -87,6 +91,7 @@ public sealed class AppSettingsStoreTests
             TaskRouterPreferences preferences = store.Load().RouterPreferences;
 
             Assert.Equal("deep", preferences.Profile);
+            Assert.Equal("gpt-5.5", preferences.Model);
             Assert.Equal("xhigh", preferences.Effort);
             Assert.Equal(1, preferences.MaxSubagents);
         }

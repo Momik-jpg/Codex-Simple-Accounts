@@ -43,7 +43,7 @@ static class Program
                 accountStore,
                 protocolClient,
                 processManager,
-                TimeSpan.FromSeconds(30),
+                TimeSpan.FromMinutes(1),
                 () => settingsStore.Load().AutoSwitchEnabled && !taskRouterActivity.IsBusy);
             Action<Form> openTaskRouter = TaskRouterIntegration.CreateOpenHandler(
                 command, processManager, settingsStore, taskRouterActivity);
@@ -57,7 +57,8 @@ static class Program
                 showOnStart: LaunchMode.ShouldShow(args),
                 taskRouterActivity: taskRouterActivity,
                 openTaskRouter: openTaskRouter);
-            TaskRouterIntegration.Attach(context.MainForm!, openTaskRouter);
+            // Tasks are invoked in the existing Codex chat through gg; the legacy
+            // standalone launcher remains available only in the advanced tray menu.
             Application.Run(context);
         }
         catch (Exception exception)

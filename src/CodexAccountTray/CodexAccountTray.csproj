@@ -8,9 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Codex-Konten</AssemblyName>
     <RootNamespace>CodexAccountTray</RootNamespace>
-    <Version>1.5.5</Version>
-    <AssemblyVersion>1.5.5.0</AssemblyVersion>
-    <FileVersion>1.5.5.0</FileVersion>
+    <Version>1.6.0</Version>
+    <AssemblyVersion>1.6.0.0</AssemblyVersion>
+    <FileVersion>1.6.0.0</FileVersion>
     <Product>Codex-Konten</Product>
     <Company>Andrin</Company>
     <Description>Lokale Verwaltung mehrerer Codex-Konten</Description>
@@ -22,7 +22,7 @@
                       Link="Assets\Codex-Konten.ico"
                       LogicalName="CodexAccountTray.AppIcon.ico" />
     <Content Include="..\..\tools\task-router\**\*"
-             Exclude="..\..\tools\task-router\**\__pycache__\**;..\..\tools\task-router\**\*.pyc"
+             Exclude="..\..\tools\task-router\**\__pycache__\**;..\..\tools\task-router\**\*.pyc;..\..\tools\task-router\tests\**"
              Link="TaskRouter\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />

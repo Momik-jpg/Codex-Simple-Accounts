@@ -11,15 +11,18 @@ internal static class NativeTheme
     private const int TextColor = 36;
 
     public static void ApplyDarkTitleBar(nint handle, Color background)
+        => ApplyTitleBar(handle, background, Color.White, true);
+
+    public static void ApplyTitleBar(nint handle, Color background, Color foreground, bool dark)
     {
-        int enabled = 1;
+        int enabled = dark ? 1 : 0;
         if (DwmSetWindowAttribute(handle, ImmersiveDarkMode, ref enabled, sizeof(int)) != 0)
         {
             DwmSetWindowAttribute(handle, ImmersiveDarkModeBefore20H1, ref enabled, sizeof(int));
         }
 
         int backgroundColor = ToColorRef(background);
-        int foregroundColor = ToColorRef(Color.White);
+        int foregroundColor = ToColorRef(foreground);
         DwmSetWindowAttribute(handle, BorderColor, ref backgroundColor, sizeof(int));
         DwmSetWindowAttribute(handle, CaptionColor, ref backgroundColor, sizeof(int));
         DwmSetWindowAttribute(handle, TextColor, ref foregroundColor, sizeof(int));

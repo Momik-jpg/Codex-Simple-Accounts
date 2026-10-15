@@ -167,6 +167,20 @@
       "minItems": 1,
       "maxItems": 6
     },
+    "plan_steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "verification": { "type": "string", "minLength": 1, "maxLength": 240 }
+        },
+        "required": ["action", "verification"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 5
+    },
     "evidence": {
       "type": "array",
       "items": {
@@ -191,6 +205,7 @@
     "blocking_reason",
     "parallel_candidates",
     "acceptance_checks",
+    "plan_steps",
     "evidence"
   ],
   "additionalProperties": false

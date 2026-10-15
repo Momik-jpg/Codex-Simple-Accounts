@@ -53,6 +53,7 @@ public static class TaskRouterIntegration
                     {
                         RouterProfile = normalized.Profile,
                         RouterEffort = normalized.Effort,
+                        RouterModel = normalized.Model,
                         RouterMaxSubagents = normalized.MaxSubagents
                     });
                 });
@@ -79,10 +80,13 @@ public static class TaskRouterIntegration
     {
         var button = new RoundedButton
         {
-            Name = "AutoTaskRouterButton", Text = "Neue Auto-Aufgabe",
-            Location = new Point(30, manager.ClientSize.Height - 124), Size = new Size(210, 42),
+            Name = "AutoTaskRouterButton",
+            Text = "Neue Auto-Aufgabe",
+            Location = new Point(30, manager.ClientSize.Height - 124),
+            Size = new Size(210, 42),
             Anchor = AnchorStyles.Left | AnchorStyles.Bottom,
-            BackColor = Color.FromArgb(64, 132, 214), ForeColor = Color.White,
+            BackColor = Color.FromArgb(64, 132, 214),
+            ForeColor = Color.White,
             CornerRadius = 11,
             AccessibleName = "Auto-Aufgabe öffnen",
             AccessibleDescription = "Aufgabe automatisch einstufen und mit passendem Modell starten"
@@ -93,7 +97,8 @@ public static class TaskRouterIntegration
             Location = new Point(255, manager.ClientSize.Height - 116),
             Size = new Size(Math.Max(200, manager.ClientSize.Width - 280), 30),
             Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
-            ForeColor = Color.FromArgb(151, 162, 174), AutoEllipsis = true
+            ForeColor = Color.FromArgb(151, 162, 174),
+            AutoEllipsis = true
         };
         button.Click += (_, _) => openTaskRouter(manager);
         manager.Controls.Add(button);

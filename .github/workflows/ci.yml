@@ -21,23 +21,57 @@ jobs:
         with:
           python-version: '3.12'
       - run: dotnet restore CodexAccountTray.sln
+      - run: dotnet build CodexAccountTray.sln -c Release --no-restore
       - run: dotnet test CodexAccountTray.sln -c Release --no-restore --logger "trx;LogFileName=tests.trx"
+        env:
+          ROUTER_UI_ARTIFACTS: ${{ github.workspace }}/artifacts/router-ui
+      - name: Validate Python syntax, JSON and project XML
+        run: |
+          python -m compileall -q tools/task-router tools/verify_metadata.py
+          python tools/verify_metadata.py
       - name: Offline routing tests (no credentials or inference)
         run: python -m unittest discover -s tools/task-router/tests -v
       - name: Verify router publish payload
         shell: pwsh
         run: |
-          dotnet publish src/CodexAccountTray/CodexAccountTray.csproj -c Release --no-restore -o artifacts/router-smoke
+          dotnet restore src/CodexAccountTray/CodexAccountTray.csproj -r win-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $required = @('desktop_entry.py', 'router.py', 'routing_policy.json', 'assessment.schema.json', 'prompts/triage.txt', 'task-router/SKILL.md')
+          dotnet publish src/CodexAccountTray/CodexAccountTray.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/router-smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tools/package_licenses.ps1 -Project src/CodexAccountTray/CodexAccountTray.csproj -Publish artifacts/router-smoke
+          if (-not (Test-Path 'artifacts/router-smoke/Codex-Konten.exe')) { throw 'Release executable missing' }
+          $licenses = @('LICENSE.txt', 'THIRD_PARTY_LICENSES.md', 'Licenses/dotnet-runtime-LICENSE.txt', 'Licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt', 'Licenses/windowsdesktop-runtime-LICENSE.txt')
+          foreach ($file in $licenses) {
+            if (-not (Test-Path "artifacts/router-smoke/$file")) { throw "Missing license notice: $file" }
+          }
+          $expectedVersion = ([xml](Get-Content 'src/CodexAccountTray/CodexAccountTray.csproj')).Project.PropertyGroup.Version
+          $actualFileVersion = (Get-Item 'artifacts/router-smoke/Codex-Konten.exe').VersionInfo.FileVersion
+          if ($actualFileVersion -ne "$expectedVersion.0") { throw "Release executable file version mismatch: $actualFileVersion" }
+          $required = @('desktop_entry.py', 'mcp_server.py', 'gg/SKILL.md', 'router.py', 'routing_policy.json', 'assessment.schema.json', 'prompts/triage.txt', 'task-router/SKILL.md')
           foreach ($file in $required) {
             if (-not (Test-Path "artifacts/router-smoke/TaskRouter/$file")) { throw "Missing router asset: $file" }
           }
+          if (Test-Path 'artifacts/router-smoke/TaskRouter/tests') { throw 'Test fixtures must not ship in the installer' }
+          python artifacts/router-smoke/TaskRouter/router.py --help
           python artifacts/router-smoke/TaskRouter/router.py demo umr
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Exercise the shipped MCP entry point, not just its source-tree import.
+          $ping = '{"jsonrpc":"2.0","id":7,"method":"ping"}' | python artifacts/router-smoke/TaskRouter/mcp_server.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $reply = $ping | ConvertFrom-Json
+          if ($reply.id -ne 7 -or $reply.jsonrpc -ne '2.0' -or $null -eq $reply.result -or $null -ne $reply.error) { throw 'Published MCP ping failed' }
+      - name: Unsigned publish smoke artifact (not an installer)
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-x64-publish-smoke
+          path: artifacts/router-smoke/
+          retention-days: 7
       - name: Test reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-reports
-          path: '**/TestResults/*.trx'
+          path: |
+            **/TestResults/*.trx
+            artifacts/router-ui/*.png
           retention-days: 7

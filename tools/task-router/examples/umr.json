@@ -33,6 +33,20 @@
     "Betroffene Export-, Rig- und Animationsprüfungen bestehen.",
     "Unbeobachtbare Geometrie als Annahme kennzeichnen."
   ],
+  "plan_steps": [
+    {
+      "action": "Aktuellen Modellstand, Referenzen und Vergleichskamera prüfen.",
+      "verification": "Gespeicherten Ausgangsstand und nutzbare Ansichten bestätigen."
+    },
+    {
+      "action": "Geometrie und Textur anhand der belegbaren Ansichten gezielt verbessern.",
+      "verification": "Vorher/Nachher unter gleicher Kamera vergleichen."
+    },
+    {
+      "action": "Export, Rig und Animation der betroffenen Teile prüfen.",
+      "verification": "Tatsächlich ausgeführte Checks und unbeobachtbare Annahmen dokumentieren."
+    }
+  ],
   "evidence": [
     "Synthetischer Test: eine hohe Versionsnummer ist kein Stagnationsnachweis.",
     "Auftrag beinhaltet visuell-räumliche Rekonstruktion; Einstufung ist ein Beispiel.",

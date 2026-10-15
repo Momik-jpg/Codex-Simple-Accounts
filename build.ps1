@@ -20,6 +20,9 @@ dotnet publish $project -c Release -r win-x64 --self-contained true --no-restore
     -p:DebugType=None -p:DebugSymbols=false -o $publish
 if ($LASTEXITCODE -ne 0) { throw 'Publish fehlgeschlagen.' }
 
+& (Join-Path $root 'tools\package_licenses.ps1') -Project $project -Publish $publish
+if ($LASTEXITCODE -ne 0) { throw 'Lizenz-Paketierung fehlgeschlagen.' }
+
 $isccCandidates = @(
     (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
     (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),

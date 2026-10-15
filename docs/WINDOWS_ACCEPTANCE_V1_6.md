@@ -1,0 +1,40 @@
+# Windows-Abnahme v1.6.0 – Zwischenstand, nicht freigegeben
+
+Stand: 29. September 2026. Diese Datei ist ein lokales Prüfprotokoll; die Checkliste in [Issue #6](https://github.com/Momik-jpg/Codex-Simple-Accounts/issues/6) bleibt offen. Der belegte Zwischenstand wurde [im Issue kommentiert](https://github.com/Momik-jpg/Codex-Simple-Accounts/issues/6#issuecomment-5886424726), ohne manuelle Prüfungen als erledigt zu markieren.
+
+## Beobachtete Umgebung
+
+| Merkmal | Beobachtung |
+|---|---|
+| Windows | Build `10.0.26200.9457`, DisplayVersion `25H2`; der Registry-Produktname meldet widersprüchlich „Windows 10 Pro“, daher Windows-11-Edition noch nicht unabhängig bestätigt |
+| Architektur | `AMD64` |
+| Skalierung | `AppliedDPI=144` (150 %); keine visuelle Abnahme daraus ableitbar |
+| Python | 3.11.9 |
+| Codex CLI | 0.140.0 |
+| Inno Setup | 6.7.3 |
+| Konto | Vorhandene CLI-Anmeldung ausschliesslich für den lesenden `model/list`-Abruf verwendet; kein separates Testkonto bereitgestellt |
+| Testprojekt | Temporäre Unit-Test-Fixtures, noch kein manueller wegwerfbarer UI-Testordner |
+| Screenshots | Keine – native UI wurde noch nicht visuell geprüft |
+
+## Automatisch lokal geprüft
+
+- `model/list` lieferte für die aktive CLI-Anmeldung nur `gpt-5.5` mit `low`, `medium`, `high`, `xhigh`. Kein Modell wurde aus der Präferenzliste als verfügbar vorausgesetzt.
+- 102 .NET-Tests und 75 Python-Tests bestanden. Diese simulieren kritische Router-, Start-, Konto- und Fehlerpfade sowie Planvalidierung. Neue Regressionstests prüfen externe Wechsel von `auth.json` vor und während eines Kontowechsels, beim Abmelden und während der Limitabfrage; auch eine legitime Token-Erneuerung desselben Kontos bleibt möglich. Das ersetzt keine echte Anmeldung oder Desktop-Abnahme.
+- Release-Build und Inno-Installer wurden lokal kompiliert; Produkt-/Dateiversion `1.6.0`. Der Installer wurde **nicht** ausgeführt.
+- Lokaler Installationskandidat `Codex-Konten-Installer.exe`: `34'544'125` Bytes, SHA-256 `DB7AE0111A43B58A9E4624D035F1DC8E9F03A27F07AC53DE8BAB3EF6D5D100CC`. Der Hash ist noch nicht mit einem hochgeladenen Release-Asset verglichen.
+- Der Build kopierte Projekt-MIT-Lizenz, .NET-Runtime-Lizenz, deren Drittanbieterhinweise und WindowsDesktop-Lizenz versionsgenau und unverändert in die Publish-Ausgabe. Das Inno-Buildprotokoll bestätigt alle fünf Dateien im Installer und die Lizenzseite; der Installer selbst wurde nicht installiert.
+- `Get-AuthenticodeSignature` meldete `NotSigned`; eine Windows-Herausgeber-/SmartScreen-Warnung ist möglich und wird nicht automatisch umgangen.
+- Python-Syntax, Router-JSON, Projekt-XML, Versionsabgleich und Publish-Payload wurden lokal geprüft.
+- Quelltextsuche ergab keinen neuen Listener für Port `47831`; bei der Stichprobe war auf diesem Port kein lokaler TCP-Listener sichtbar. Der bestehende `CodexBackend` kann einen kurzlebigen freien Loopback-Port verwenden.
+
+## Offen und nicht als bestanden behauptet
+
+- Öffnen aus Kontenfenster und Tray; Fokus, Tastatur, Hover-Übergänge mit Windows-Animationen ein/aus, Fehler-/Ladezustände; Layout bei 100 %, 125 %, 150 % und 200 %; Screenshots.
+- Echte Einstufung, Start, schreibgeschützter und ausdrücklich freigegebener Schreibmodus mit separatem Testkonto und Wegwerfprojekt.
+- Login, Logout, Re-Login, Auto-Swap und Kontowechsel an einer ungefährlichen Testanmeldung; keine Beschädigung von Desktop-Chats oder Kontospeicher.
+- Richtlinienentscheid: Der Projektinhaber möchte Auto-Swap zwischen eigenen, separat bezahlten Konten beibehalten. Die bestehende Regel in `LimitMonitor` wählt bei erschöpftem Limit ein anderes Konto. OpenAI [beschreibt den manuellen Web-Kontowechsel](https://help.openai.com/en/articles/20001068-use-multiple-accounts-with-account-switching), weist dort aber darauf hin, dass er in Codex Desktop noch nicht unterstützt wird; ein automatischer limitabhängiger Wechsel wird nicht ausdrücklich freigegeben. Die [Nutzungsbedingungen für die Schweiz](https://openai.com/policies/eu-terms-of-use/) verbieten die Umgehung von Rate-Limits. Ob dieser konkrete Fall darunter fällt, ist nicht verbindlich geklärt und darf nicht als rechtlich geprüft gelten.
+- Lizenz-/Markenprüfung: Der lokal installierte Inno-Setup-Compiler meldet „Non-commercial use only“; kommerzieller Einsatzzweck und gegebenenfalls eine passende Inno-Lizenz sind nicht geklärt. Die Herkunft/Nutzungsrechte des App-Icons sind nicht unabhängig belegt. Der Unabhängigkeits-Hinweis im README ersetzt keine Markenprüfung.
+- Clean-Install, Upgrade von v1.5.5, Deinstallation und Neuinstallation. Installation auf dem produktiven Benutzerprofil wäre ohne Testumgebung nicht verantwortbar.
+- [PR #7](https://github.com/Momik-jpg/Codex-Simple-Accounts/pull/7) bleibt ein Entwurf. Die CI muss für den endgültigen Code grün sein; Review, Merge und Füllen des Release-Entwurfs mit einem final verifizierten Installer bleiben offen. Die lokale GitHub-CLI-Anmeldung meldet ein ungültiges Token; PR und Issue-Kommentar wurden über die bereits funktionierende Git-Anmeldung erstellt.
+
+Bis diese Punkte wirklich geprüft und dokumentiert sind, ist v1.6.0 **nicht veröffentlichungsbereit**. Der bestehende Release-Entwurf bleibt unveröffentlicht.

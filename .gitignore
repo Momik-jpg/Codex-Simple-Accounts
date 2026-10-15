@@ -16,6 +16,8 @@ docs/superpowers/
 *.user
 *.suo
 *.log
+__pycache__/
+*.pyc
 
 # Local dependencies and credentials
 node_modules/
